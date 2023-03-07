@@ -1,0 +1,51 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>org.springframework.data</groupId>
+    <artifactId>spring-data-ultipa</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+
+    <name>Spring Data Ultipa</name>
+    <description>Spring Data Implementation for Ultipa</description>
+    <url>https://ultipa.com/projects/spring-data-ultipa</url>
+    <inceptionYear>2022</inceptionYear>
+    <organization>
+        <name>Ultipa, next-generation graph database</name>
+        <url>https://ultipa.com</url>
+    </organization>
+
+    <parent>
+        <groupId>org.springframework.data.build</groupId>
+        <artifactId>spring-data-parent</artifactId>
+        <version>2.7.9-SNAPSHOT</version>
+    </parent>
+
+    <properties>
+        <java-module-name>spring.data.ultipa</java-module-name>
+        <springdata.commons>2.7.9-SNAPSHOT</springdata.commons>
+    </properties>
+
+    <dependencies>
+        <!-- Spring Data -->
+        <dependency>
+            <groupId>org.springframework.data</groupId>
+            <artifactId>spring-data-commons</artifactId>
+            <version>${springdata.commons}</version>
+        </dependency>
+    </dependencies>
+
+    <repositories>
+        <repository>
+            <id>spring-libs-snapshot</id>
+            <url>https://repo.spring.io/libs-snapshot</url>
+        </repository>
+    </repositories>
+
+    <pluginRepositories>
+        <pluginRepository>
+            <id>spring-plugins-release</id>
+            <url>https://repo.spring.io/plugins-release</url>
+        </pluginRepository>
+    </pluginRepositories>
+</project>
