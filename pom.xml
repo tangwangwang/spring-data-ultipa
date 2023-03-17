@@ -24,6 +24,7 @@
     <properties>
         <java-module-name>spring.data.ultipa</java-module-name>
         <springdata.commons>2.7.9-SNAPSHOT</springdata.commons>
+        <ultipa-java-sdk>4.2.1</ultipa-java-sdk>
     </properties>
 
     <dependencies>
@@ -42,6 +43,14 @@
             <groupId>org.springframework.data</groupId>
             <artifactId>spring-data-commons</artifactId>
             <version>${springdata.commons}</version>
+        </dependency>
+
+        <!-- Ultipa Java SDK -->
+        <dependency>
+            <groupId>com.ultipa</groupId>
+            <artifactId>ultipa-java-sdk</artifactId>
+            <version>${ultipa-java-sdk}</version>
+            <optional>true</optional>
         </dependency>
     </dependencies>
 
