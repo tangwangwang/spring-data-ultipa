@@ -41,13 +41,11 @@ public class UltipaRepositoryFactory extends RepositoryFactorySupport {
         this.mappingContext = operations.getConverter().getMappingContext();
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public <T, ID> EntityInformation<T, ID> getEntityInformation(Class<T> domainClass) {
         UltipaPersistentEntity<?> persistentEntity = mappingContext.getRequiredPersistentEntity(domainClass);
 
-        Assert.notNull(persistentEntity, String.format("Unable to obtain mapping metadata for %s!", domainClass));
-        return new MappingUltipaEntityInformation<>((UltipaPersistentEntity<T>) persistentEntity);
+        return UltipaEntityInformationSupport.getEntityInformation(persistentEntity);
     }
 
     @Override
