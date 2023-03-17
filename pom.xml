@@ -45,6 +45,12 @@
             <version>${springdata.commons}</version>
         </dependency>
 
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <optional>true</optional>
+        </dependency>
+
         <!-- Ultipa Java SDK -->
         <dependency>
             <groupId>com.ultipa</groupId>
