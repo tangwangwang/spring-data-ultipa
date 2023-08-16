@@ -7,7 +7,6 @@ import org.springframework.context.expression.MapAccessor;
 import org.springframework.core.convert.ConversionService;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.data.ultipa.annotation.PropertyType;
 import org.springframework.data.ultipa.core.UltipaOperations;
 import org.springframework.data.ultipa.core.convert.UltipaConverter;
 import org.springframework.data.ultipa.core.exception.IncorrectResultTypeException;
@@ -315,15 +314,7 @@ public class Query {
 
         Object value = readValue(placeholders[0].trim());
 
-        if (placeholders.length > 1) {
-            Object formatValue = formatValue(value, placeholders[1]);
-
-            return formatValue == null
-                    ? (placeholders.length > 2 ? defaultValue(placeholders[2]) : defaultValue(placeholders[1]))
-                    : formatValue;
-        }
-
-        return value;
+        return formatValue(value, placeholders[1]);
     }
 
     @Nullable
@@ -393,48 +384,11 @@ public class Query {
         return value;
     }
 
-    @Nullable
-    private Object defaultValue(String placeholder) {
-        if (!StringUtils.hasText(placeholder)) {
-            return null;
-        }
-        switch (placeholder.toLowerCase(Locale.ROOT)) {
-            case "field":
-            case "name":
-            case "json":
-            case "string":
-                return PropertyType.STRING.getNullValue();
-            case "text":
-                return PropertyType.TEXT.getNullValue();
-            case "ordinal":
-            case "int":
-            case "int32":
-                return PropertyType.INT32.getNullValue();
-            case "int64":
-                return PropertyType.INT64.getNullValue();
-            case "uint":
-            case "uint32":
-                return PropertyType.UINT32.getNullValue();
-            case "uint64":
-                return PropertyType.UINT64.getNullValue();
-            case "float":
-                return PropertyType.FLOAT.getNullValue();
-            case "double":
-                return PropertyType.DOUBLE.getNullValue();
-            case "datetime":
-                return PropertyType.DATETIME.getNullValue();
-            case "timestamp":
-                return PropertyType.TIMESTAMP.getNullValue();
-            default:
-                return null;
-        }
-    }
-
     @SuppressWarnings({"unchecked", "rawtypes"})
     private String convertUqlValue(@Nullable Object value) {
         ConversionService conversionService = converter.getConversionService();
         if (value == null) {
-            return "";
+            return "null";
         }
 
         Class<?> valueType = value.getClass();
@@ -456,7 +410,7 @@ public class Query {
                 return Optional.ofNullable(value)
                         .map(v -> conversionService.convert(v, LocalDateTime.class))
                         .map(d -> conversionService.convert(d, String.class))
-                        .orElse(PropertyType.DATETIME.getNullValue().toString());
+                        .orElse("null");
             }
         }
 
@@ -465,7 +419,7 @@ public class Query {
                 // because ultipa db interpret character \\t as \t, so need to replace \\t as \\\\t to keep character \\t
                 .map(v -> v.replace("\\", "\\\\"))
                 .map(v -> v.replace("\"", "\\\""))
-                .orElse("");
+                .orElse("null");
     }
 
 }

@@ -24,24 +24,22 @@ public enum PropertyType {
     /**
      * Auto type that is derived from the property value.
      */
-    AUTO("", ""),
-    STRING("string", "\n\t\t\n\t\t\n\uE000\uE001\uE002\n\t\t\t\t\n"),
-    TEXT("text", "\n\t\t\n\t\t\n\uE000\uE001\uE002\n\t\t\t\t\n"),
-    INT32("int32", Integer.MAX_VALUE),
-    INT64("int64", Long.MAX_VALUE),
-    UINT32("uint32", 4294967295L),
-    UINT64("uint64", "18446744073709551615"),
-    FLOAT("float", Float.MAX_VALUE),
-    DOUBLE("double", Double.MAX_VALUE),
-    DATETIME("datetime", "0-0-0 0:0:0.000000"),
-    TIMESTAMP("timestamp", "1970-01-01 08:00:00");
+    AUTO(""),
+    STRING("string"),
+    TEXT("text"),
+    INT32("int32"),
+    INT64("int64"),
+    UINT32("uint32"),
+    UINT64("uint64"),
+    FLOAT("float"),
+    DOUBLE("double"),
+    DATETIME("datetime"),
+    TIMESTAMP("timestamp");
 
     private final String mappedName;
-    private final Object nullValue;
 
-    PropertyType(String mappedName, Object nullValue) {
+    PropertyType(String mappedName) {
         this.mappedName = mappedName;
-        this.nullValue = nullValue;
     }
 
     /**
@@ -51,15 +49,6 @@ public enum PropertyType {
      */
     public String getMappedName() {
         return mappedName;
-    }
-
-    /**
-     * Returns the null value used to represent the type.
-     *
-     * @return the null value used to represent the type.
-     */
-    public Object getNullValue() {
-        return nullValue;
     }
 
     /**

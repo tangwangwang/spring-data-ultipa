@@ -212,17 +212,6 @@ public class MappingUltipaConverter extends AbstractUltipaConverter implements A
     }
 
     @Nullable
-    private Object handleNullValue(Object value, UltipaPersistentProperty property) {
-        PropertyType propertyType = property.getPropertyType();
-        if (propertyType == PropertyType.TIMESTAMP || propertyType == PropertyType.DATETIME
-                ? ((Date) value).getTime() == 0
-                : Objects.equals(propertyType.getNullValue(), value)) {
-            return null;
-        }
-        return value;
-    }
-
-    @Nullable
     private Object handlePropertyType(Object value, UltipaPersistentProperty property) {
         if (property.getPropertyType() == PropertyType.UINT64) {
             return conversionService.convert(value, BigInteger.class);
@@ -491,24 +480,25 @@ public class MappingUltipaConverter extends AbstractUltipaConverter implements A
         return value;
     }
 
+    @Nullable
     private String getPotentiallyConvertedSimpleWrite(@Nullable Object value, PropertyType propertyType) {
         switch (propertyType) {
             case STRING:
             case TEXT:
                 return Optional.ofNullable(value)
                         .map(v -> conversionService.convert(v, String.class))
-                        .orElse(propertyType.getNullValue().toString());
+                        .orElse(null);
             case DATETIME:
             case TIMESTAMP:
                 return Optional.ofNullable(value)
                         .map(v -> conversionService.convert(v, LocalDateTime.class))
                         .map(d -> conversionService.convert(d, String.class))
-                        .orElse(propertyType.getNullValue().toString());
+                        .orElse(null);
             default:
                 return Optional.ofNullable(value)
                         .map(v -> conversionService.convert(v, Number.class))
                         .map(String::valueOf)
-                        .orElse(propertyType.getNullValue().toString());
+                        .orElse(null);
         }
     }
 
@@ -562,7 +552,6 @@ public class MappingUltipaConverter extends AbstractUltipaConverter implements A
             Object value = expression != null ? evaluator.evaluate(expression) : accessor.get(property);
 
             return (T) Optional.ofNullable(value)
-                    .map(v -> handleNullValue(v, property))
                     .map(v -> handlePropertyType(v, property))
                     .map(v -> handleJson(v, property))
                     .map(v -> handleEnumeration(v, property))

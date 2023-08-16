@@ -194,7 +194,7 @@ public interface Schema {
         throw new UnsupportedOperationException();
     }
 
-    default Object put(String key, Object value) {
+    default Object put(String key, @Nullable Object value) {
         throw new UnsupportedOperationException();
     }
 
