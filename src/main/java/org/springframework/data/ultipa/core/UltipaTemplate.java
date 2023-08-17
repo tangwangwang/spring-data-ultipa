@@ -1,6 +1,8 @@
 package org.springframework.data.ultipa.core;
 
 import com.ultipa.Ultipa;
+import com.ultipa.sdk.connect.Connection;
+import com.ultipa.sdk.connect.conf.RequestConfig;
 import com.ultipa.sdk.connect.driver.UltipaClientDriver;
 import com.ultipa.sdk.operate.entity.*;
 import com.ultipa.sdk.operate.exception.UqlExecutionException;
@@ -8,12 +10,12 @@ import com.ultipa.sdk.operate.response.Response;
 import org.springframework.beans.BeansException;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
+import org.springframework.dao.IncorrectResultSizeDataAccessException;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.mapping.callback.EntityCallbacks;
 import org.springframework.data.mapping.context.MappingContext;
 import org.springframework.data.ultipa.core.convert.UltipaConverter;
-import org.springframework.data.ultipa.core.exception.IncorrectResultSizeException;
 import org.springframework.data.ultipa.core.exception.QueryException;
 import org.springframework.data.ultipa.core.mapping.UltipaPersistentEntity;
 import org.springframework.data.ultipa.core.mapping.UltipaPersistentProperty;
@@ -46,13 +48,18 @@ public class UltipaTemplate implements UltipaOperations, ApplicationContextAware
     private final static String FIND_EDGES_UQL = "find().edges({ %s }) as edges return edges{*}";
     private final static String REMOVE_NODES_UQL = "delete().nodes({ %s })";
     private final static String REMOVE_EDGES_UQL = "delete().edges({ %s })";
+    private static final SpelExpressionParser PARSER = new SpelExpressionParser(new SpelParserConfiguration(true, true));
     private final UltipaClientDriver clientDriver;
     private final MappingContext<? extends UltipaPersistentEntity<?>, UltipaPersistentProperty> mappingContext;
     private final UltipaConverter converter;
-    private static final SpelExpressionParser PARSER = new SpelExpressionParser(new SpelParserConfiguration(true, true));
+    private final boolean useLeader;
     private @Nullable EntityCallbacks entityCallbacks;
 
     public UltipaTemplate(UltipaClientDriver clientDriver, UltipaConverter converter) {
+        this(clientDriver, converter, false);
+    }
+
+    public UltipaTemplate(UltipaClientDriver clientDriver, UltipaConverter converter, boolean useLeader) {
 
         Assert.notNull(clientDriver, "UltipaClientDriver is required");
         Assert.notNull(converter, "UltipaConverter is required");
@@ -60,6 +67,7 @@ public class UltipaTemplate implements UltipaOperations, ApplicationContextAware
         this.clientDriver = clientDriver;
         this.converter = converter;
         this.mappingContext = converter.getMappingContext();
+        this.useLeader = useLeader;
     }
 
     @Override
@@ -186,7 +194,7 @@ public class UltipaTemplate implements UltipaOperations, ApplicationContextAware
     public <T> T findOne(String uql, Class<T> entityClass) {
         List<Schema> schemas = doExecute(uql);
         if (schemas.size() > 1) {
-            throw new IncorrectResultSizeException(1, schemas.size());
+            throw new IncorrectResultSizeDataAccessException(1, schemas.size());
         }
         return schemas.isEmpty() ? null : this.converter.read(entityClass, schemas.get(0));
     }
@@ -201,7 +209,7 @@ public class UltipaTemplate implements UltipaOperations, ApplicationContextAware
     public Map<String, Object> findOne(String uql) {
         List<Schema> schemas = doExecute(uql);
         if (schemas.size() > 1) {
-            throw new IncorrectResultSizeException(1, schemas.size());
+            throw new IncorrectResultSizeDataAccessException(1, schemas.size());
         }
         return schemas.isEmpty() ? null : this.converter.readMap(schemas.get(0));
     }
@@ -216,7 +224,7 @@ public class UltipaTemplate implements UltipaOperations, ApplicationContextAware
     public List<Object> findArray(String uql) {
         List<Schema> schemas = doExecute(uql);
         if (schemas.size() > 1) {
-            throw new IncorrectResultSizeException(1, schemas.size());
+            throw new IncorrectResultSizeDataAccessException(1, schemas.size());
         }
         return schemas.isEmpty() ? null : this.converter.readArray(schemas.get(0));
     }
@@ -282,7 +290,17 @@ public class UltipaTemplate implements UltipaOperations, ApplicationContextAware
 
     private List<Schema> doExecute(String uql) {
         try {
-            Response response = clientDriver.getConnection().uql(uql);
+            Connection connection = clientDriver.getConnection();
+            Response response;
+
+            if (useLeader) {
+                RequestConfig requestConfig = new RequestConfig();
+                requestConfig.setUseMaster(true).setHost(connection.getLeader().getHost());
+                response = connection.uql(uql, requestConfig);
+            } else {
+                response = connection.uql(uql);
+            }
+
             if (response.getStatus().getErrorCode() != Ultipa.ErrorCode.SUCCESS) {
                 throw new QueryException(String.format("error code: %s, message: %s", response.getStatus().getErrorCode(),
                         response.getStatus().getMsg()), uql);
