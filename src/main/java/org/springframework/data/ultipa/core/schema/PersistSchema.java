@@ -347,7 +347,10 @@ abstract class PersistSchema extends MapSchema {
         }
     }
 
-    protected String toUqlValue(Object value) {
+    protected String toUqlValue(@Nullable Object value) {
+        if (value == null) {
+            return "null";
+        }
         if (value instanceof Number) {
             return value.toString();
         }

@@ -3,6 +3,8 @@ package org.springframework.data.ultipa.annotation;
 
 import java.lang.annotation.*;
 
+import static org.springframework.data.ultipa.annotation.EnumType.FIELD;
+
 /**
  * Annotation to define enumerated type for schema properties.
  *
@@ -14,20 +16,8 @@ import java.lang.annotation.*;
 @Retention(RetentionPolicy.RUNTIME)
 public @interface Enumerated {
 
-    Type value() default Type.FIELD;
-
-    enum Type {
-        /**
-         * Use the name property of an enumeration
-         */
-        NAME,
-        /**
-         * Use the ordinal property of an enumeration
-         */
-        ORDINAL,
-        /**
-         * Use the other property of an enumeration, Find by {@link EnumValue} annotation
-         */
-        FIELD,
-    }
+    /**
+     * (Optional) The type used in mapping an enum type.
+     */
+    EnumType value() default FIELD;
 }

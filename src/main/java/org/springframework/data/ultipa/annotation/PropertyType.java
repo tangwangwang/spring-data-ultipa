@@ -1,6 +1,8 @@
 package org.springframework.data.ultipa.annotation;
 
 import com.ultipa.Ultipa;
+import com.ultipa.sdk.data.Point;
+import org.springframework.data.ultipa.core.mapping.UltipaPersistentProperty;
 import org.springframework.util.ClassUtils;
 
 import java.math.BigDecimal;
@@ -34,7 +36,22 @@ public enum PropertyType {
     FLOAT("float"),
     DOUBLE("double"),
     DATETIME("datetime"),
-    TIMESTAMP("timestamp");
+    TIMESTAMP("timestamp"),
+    POINT("point"),
+
+    // Array type
+
+    STRING_ARRAY("string[]"),
+    TEXT_ARRAY("text[]"),
+    INT32_ARRAY("int32[]"),
+    INT64_ARRAY("int64[]"),
+    UINT32_ARRAY("uint32[]"),
+    UINT64_ARRAY("uint64[]"),
+    FLOAT_ARRAY("float[]"),
+    DOUBLE_ARRAY("double[]"),
+    DATETIME_ARRAY("datetime[]"),
+    TIMESTAMP_ARRAY("timestamp[]"),
+    ;
 
     private final String mappedName;
 
@@ -52,34 +69,47 @@ public enum PropertyType {
     }
 
     /**
-     * Resolves the default Ultipa property type according to the given Java type
+     * Resolves the default ultipa property type according to the given ultipa persistent property
      *
-     * @param type The given Java type
+     * @param property the given ultipa persistent property
      * @return The ultipa property type
      */
-    public static PropertyType resolverAutoJavaType(Class<?> type) {
-        Class<?> actualType = ClassUtils.resolvePrimitiveIfNecessary(type);
-        if (Arrays.asList(Boolean.class, Byte.class, Short.class, Integer.class).contains(type)) {
-            return INT32;
+    public static PropertyType resolverAutoJavaType(UltipaPersistentProperty property) {
+        if (property.isJson()) {
+            return TEXT;
         }
-        if (type == Long.class) {
-            return INT64;
+        boolean isArray = property.isCollectionLike();
+        Class<?> actualType = ClassUtils.resolvePrimitiveIfNecessary(property.getActualType());
+
+        if (actualType == String.class) {
+            return isArray ? STRING_ARRAY : STRING;
         }
-        if (type == BigInteger.class) {
-            return UINT64;
+        if (Arrays.asList(Boolean.class, Byte.class, Short.class, Integer.class).contains(actualType)) {
+            return isArray ? INT32_ARRAY : INT32;
         }
-        if (type == Double.class || type == BigDecimal.class) {
-            return DOUBLE;
+        if (actualType == Long.class) {
+            return isArray ? INT64_ARRAY : INT64;
         }
-        if (type == Float.class) {
-            return FLOAT;
+        if (actualType == BigInteger.class) {
+            return isArray ? UINT64_ARRAY : UINT64;
         }
-        if (type == Timestamp.class || type == Instant.class) {
-            return TIMESTAMP;
+        if (actualType == Double.class || actualType == BigDecimal.class) {
+            return isArray ? DOUBLE_ARRAY : DOUBLE;
+        }
+        if (actualType == Float.class) {
+            return isArray ? FLOAT_ARRAY : FLOAT;
+        }
+        if (actualType == Timestamp.class || actualType == Instant.class) {
+            return isArray ? TIMESTAMP_ARRAY : TIMESTAMP;
         }
         if (Arrays.asList(Date.class, LocalDate.class, LocalTime.class, LocalDateTime.class).contains(actualType)) {
-            return DATETIME;
+            return isArray ? DATETIME_ARRAY : DATETIME;
         }
-        return STRING;
+        if (!isArray && actualType == Point.class) {
+            return POINT;
+        }
+
+        // Unable to resolve
+        throw new IllegalArgumentException("Unable to resolve type: " + property.getTypeInformation());
     }
 }

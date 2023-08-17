@@ -9,7 +9,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.ultipa.core.UltipaOperations;
 import org.springframework.data.ultipa.core.convert.UltipaConverter;
-import org.springframework.data.ultipa.core.exception.IncorrectResultTypeException;
 import org.springframework.data.ultipa.core.exception.ParameterBindingException;
 import org.springframework.data.ultipa.core.mapping.model.UltipaEnumTypeHolder;
 import org.springframework.expression.Expression;
@@ -183,11 +182,8 @@ public class Query {
                 .flatMap(Function.identity())
                 .map(Map.Entry::getValue)
                 .orElse(0);
-        try {
-            return Long.parseLong(count.toString());
-        } catch (NumberFormatException e) {
-            throw new IncorrectResultTypeException(Number.class, count.getClass());
-        }
+        // noinspection DataFlowIssue
+        return converter.getConversionService().convert(count, Long.class);
     }
 
     public boolean exists() {

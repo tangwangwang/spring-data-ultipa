@@ -18,7 +18,10 @@ import org.springframework.data.mapping.Parameter;
 import org.springframework.data.mapping.PersistentPropertyAccessor;
 import org.springframework.data.mapping.context.MappingContext;
 import org.springframework.data.mapping.model.*;
-import org.springframework.data.ultipa.annotation.*;
+import org.springframework.data.ultipa.annotation.CascadeType;
+import org.springframework.data.ultipa.annotation.EnumType;
+import org.springframework.data.ultipa.annotation.FetchType;
+import org.springframework.data.ultipa.annotation.GeneratedValue;
 import org.springframework.data.ultipa.core.UltipaOperations;
 import org.springframework.data.ultipa.core.mapping.UltipaPersistentEntity;
 import org.springframework.data.ultipa.core.mapping.UltipaPersistentProperty;
@@ -37,8 +40,6 @@ import org.springframework.util.StringUtils;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Type;
-import java.math.BigInteger;
-import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -211,14 +212,6 @@ public class MappingUltipaConverter extends AbstractUltipaConverter implements A
         return new SpELExpressionParameterValueProvider<>(evaluator, conversionService, parameterProvider);
     }
 
-    @Nullable
-    private Object handlePropertyType(Object value, UltipaPersistentProperty property) {
-        if (property.getPropertyType() == PropertyType.UINT64) {
-            return conversionService.convert(value, BigInteger.class);
-        }
-        return value;
-    }
-
     private Object handleJson(Object value, UltipaPersistentProperty property) {
         if (!property.isJson()) {
             return value;
@@ -243,7 +236,7 @@ public class MappingUltipaConverter extends AbstractUltipaConverter implements A
             return value;
         }
         Class<? extends Enum> rawType = (Class<? extends Enum>) property.getType();
-        Enumerated.Type enumeratedType = property.getRequiredEnumeratedType();
+        EnumType enumeratedType = property.getRequiredEnumeratedType();
         switch (enumeratedType) {
             case FIELD:
                 if (UltipaEnumTypeHolder.hasEnumField(rawType)) {
@@ -305,7 +298,8 @@ public class MappingUltipaConverter extends AbstractUltipaConverter implements A
             Object value = accessor.getProperty(property);
 
             if (value != null && property.isEnumProperty()) {
-                value = getPotentiallyConvertedEnumWrite(value, property);
+                Class<? extends Enum<?>> type = (Class<? extends Enum<?>>) property.getType();
+                value = getPotentiallyConvertedEnumWrite(value, type, property.getRequiredEnumeratedType());
             }
 
             if (value != null && property.isJson()) {
@@ -326,7 +320,7 @@ public class MappingUltipaConverter extends AbstractUltipaConverter implements A
                 continue;
             }
 
-            String convertedValue = getPotentiallyConvertedSimpleWrite(value, property.getPropertyType());
+            Object convertedValue = getPotentiallyConvertedSimpleWrite(value);
             sink.put(property.getPropertyName(), convertedValue);
         }
 
@@ -462,9 +456,7 @@ public class MappingUltipaConverter extends AbstractUltipaConverter implements A
 
     @Nullable
     @SuppressWarnings({"unchecked", "rawtypes"})
-    private Object getPotentiallyConvertedEnumWrite(Object value, UltipaPersistentProperty property) {
-        Class<? extends Enum> type = (Class<? extends Enum<?>>) property.getType();
-        Enumerated.Type enumType = property.getRequiredEnumeratedType();
+    private Object getPotentiallyConvertedEnumWrite(Object value, Class<? extends Enum> type, EnumType enumType) {
         switch (enumType) {
             case FIELD:
                 if (UltipaEnumTypeHolder.hasEnumField(type)) {
@@ -481,25 +473,13 @@ public class MappingUltipaConverter extends AbstractUltipaConverter implements A
     }
 
     @Nullable
-    private String getPotentiallyConvertedSimpleWrite(@Nullable Object value, PropertyType propertyType) {
-        switch (propertyType) {
-            case STRING:
-            case TEXT:
-                return Optional.ofNullable(value)
-                        .map(v -> conversionService.convert(v, String.class))
-                        .orElse(null);
-            case DATETIME:
-            case TIMESTAMP:
-                return Optional.ofNullable(value)
-                        .map(v -> conversionService.convert(v, LocalDateTime.class))
-                        .map(d -> conversionService.convert(d, String.class))
-                        .orElse(null);
-            default:
-                return Optional.ofNullable(value)
-                        .map(v -> conversionService.convert(v, Number.class))
-                        .map(String::valueOf)
-                        .orElse(null);
+    private Object getPotentiallyConvertedSimpleWrite(@Nullable Object value) {
+        if (value instanceof Number) {
+            return value;
         }
+        return Optional.ofNullable(value)
+                .map(v -> conversionService.convert(v, String.class))
+                .orElse(null);
     }
 
     private <T> T createBeanOrInstantiate(Class<T> t) {
@@ -552,7 +532,7 @@ public class MappingUltipaConverter extends AbstractUltipaConverter implements A
             Object value = expression != null ? evaluator.evaluate(expression) : accessor.get(property);
 
             return (T) Optional.ofNullable(value)
-                    .map(v -> handlePropertyType(v, property))
+                    // .map(v -> handlePropertyType(v, property))
                     .map(v -> handleJson(v, property))
                     .map(v -> handleEnumeration(v, property))
                     .orElse(null);

@@ -48,6 +48,8 @@ abstract class UltipaJsr310Converters {
         converters.add(MillisToLocalDateTimeConverter.INSTANCE);
 
         converters.add(LocalDateTimeToStringConverter.INSTANCE);
+        converters.add(LocalDateToStringConverter.INSTANCE);
+        converters.add(LocalTimeToStringConverter.INSTANCE);
         return converters;
     }
 
@@ -181,6 +183,30 @@ abstract class UltipaJsr310Converters {
         @Override
         public String convert(LocalDateTime source) {
             return source.format(DATE_FORMAT);
+        }
+    }
+
+    @WritingConverter
+    enum LocalDateToStringConverter implements Converter<LocalDate, String> {
+        INSTANCE;
+
+        private final static DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd 00:00:00");
+
+        @Override
+        public String convert(LocalDate source) {
+            return source.format(DATE_FORMAT);
+        }
+    }
+
+    @WritingConverter
+    enum LocalTimeToStringConverter implements Converter<LocalTime, String> {
+        INSTANCE;
+
+        private final static DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("00-00-00 HH:mm:ss.SSSSSS");
+
+        @Override
+        public String convert(LocalTime source) {
+            return source.format(TIME_FORMAT);
         }
     }
 }

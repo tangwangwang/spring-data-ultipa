@@ -84,12 +84,8 @@ public class BasicUltipaPersistentProperty extends AnnotationBasedPersistentProp
 
     @Override
     public PropertyType getPropertyType() {
-        PropertyType propertyType = (PropertyType) getAnnotatedValue(Property.class, "type");
-        if (propertyType == PropertyType.AUTO) {
-            return PropertyType.resolverAutoJavaType(getType());
-        }
-
-        return propertyType;
+        // TODO
+        throw new UnsupportedOperationException();
     }
 
     @Override
@@ -117,8 +113,8 @@ public class BasicUltipaPersistentProperty extends AnnotationBasedPersistentProp
     }
 
     @Override
-    public Enumerated.Type getEnumeratedType() {
-        return isEnumProperty() ? (Enumerated.Type) getAnnotatedValue(Enumerated.class) : null;
+    public EnumType getEnumeratedType() {
+        return isEnumProperty() ? (EnumType) getAnnotatedValue(Enumerated.class) : null;
     }
 
     @Override

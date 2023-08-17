@@ -1,5 +1,6 @@
 package org.springframework.data.ultipa.core.convert;
 
+import com.ultipa.sdk.data.Point;
 import org.springframework.core.convert.ConversionFailedException;
 import org.springframework.core.convert.TypeDescriptor;
 import org.springframework.core.convert.converter.Converter;
@@ -126,5 +127,18 @@ abstract class UltipaConverters {
             return source instanceof BigDecimal ? ((BigDecimal) source).toPlainString() : source.toString();
         }
     }
+
+    @WritingConverter
+    enum PointToStringConverter implements Converter<Point, String> {
+        INSTANCE;
+
+        private static final String POINT_FORMAT = "point({ latitude: %s, longitude:%s })";
+
+        @Override
+        public String convert(Point source) {
+            return String.format(POINT_FORMAT, source.getLatitude(), source.getLongitude());
+        }
+    }
+
 
 }

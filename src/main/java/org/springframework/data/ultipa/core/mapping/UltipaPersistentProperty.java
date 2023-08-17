@@ -2,7 +2,7 @@ package org.springframework.data.ultipa.core.mapping;
 
 import org.springframework.data.mapping.PersistentProperty;
 import org.springframework.data.ultipa.annotation.CascadeType;
-import org.springframework.data.ultipa.annotation.Enumerated;
+import org.springframework.data.ultipa.annotation.EnumType;
 import org.springframework.data.ultipa.annotation.FetchType;
 import org.springframework.data.ultipa.annotation.PropertyType;
 import org.springframework.lang.Nullable;
@@ -46,10 +46,10 @@ public interface UltipaPersistentProperty extends PersistentProperty<UltipaPersi
     boolean isEnumProperty();
 
     @Nullable
-    Enumerated.Type getEnumeratedType();
+    EnumType getEnumeratedType();
 
-    default Enumerated.Type getRequiredEnumeratedType() {
-        Enumerated.Type enumeratedType = getEnumeratedType();
+    default EnumType getRequiredEnumeratedType() {
+        EnumType enumeratedType = getEnumeratedType();
         if (enumeratedType == null) {
             throw new IllegalStateException();
         }
