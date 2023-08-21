@@ -12,7 +12,7 @@ import static org.springframework.data.ultipa.annotation.EnumType.FIELD;
  * @since 1.0
  */
 @Documented
-@Target(ElementType.TYPE)
+@Target(ElementType.FIELD)
 @Retention(RetentionPolicy.RUNTIME)
 public @interface Enumerated {
 

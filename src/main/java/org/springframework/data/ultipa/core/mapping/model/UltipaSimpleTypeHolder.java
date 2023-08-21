@@ -1,5 +1,6 @@
 package org.springframework.data.ultipa.core.mapping.model;
 
+import com.ultipa.sdk.data.Point;
 import org.springframework.data.mapping.model.SimpleTypeHolder;
 
 import java.math.BigDecimal;
@@ -26,12 +27,15 @@ public class UltipaSimpleTypeHolder extends SimpleTypeHolder {
         simpleTypes.add(LocalDate.class);
         simpleTypes.add(LocalTime.class);
         simpleTypes.add(LocalDateTime.class);
+        simpleTypes.add(ZonedDateTime.class);
         simpleTypes.add(Instant.class);
         simpleTypes.add(Period.class);
         simpleTypes.add(Duration.class);
 
         simpleTypes.add(BigDecimal.class);
         simpleTypes.add(BigInteger.class);
+
+        simpleTypes.add(Point.class);
 
         ULTIPA_SIMPLE_TYPES = Collections.unmodifiableSet(simpleTypes);
     }

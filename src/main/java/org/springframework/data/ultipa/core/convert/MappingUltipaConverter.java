@@ -7,6 +7,7 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.beans.BeanWrapperImpl;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.PropertyAccessor;
+import org.springframework.beans.factory.BeanClassLoaderAware;
 import org.springframework.beans.factory.config.AutowireCapableBeanFactory;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
@@ -18,6 +19,7 @@ import org.springframework.data.mapping.Parameter;
 import org.springframework.data.mapping.PersistentPropertyAccessor;
 import org.springframework.data.mapping.context.MappingContext;
 import org.springframework.data.mapping.model.*;
+import org.springframework.data.projection.SpelAwareProxyProjectionFactory;
 import org.springframework.data.ultipa.annotation.CascadeType;
 import org.springframework.data.ultipa.annotation.EnumType;
 import org.springframework.data.ultipa.annotation.FetchType;
@@ -50,7 +52,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * @author Wangwang Tang
  * @since 1.0
  */
-public class MappingUltipaConverter extends AbstractUltipaConverter implements ApplicationContextAware {
+public class MappingUltipaConverter extends AbstractUltipaConverter implements ApplicationContextAware, BeanClassLoaderAware {
 
     private static final String INVALID_TYPE_TO_READ = "Expected to read Document %s into type %s but didn't find a PersistentEntity for the latter!";
 
@@ -61,6 +63,7 @@ public class MappingUltipaConverter extends AbstractUltipaConverter implements A
     private final UltipaProxyFactory proxyFactory;
     private final UltipaTypeMapper typeMapper;
     private final ObjectMapper objectMapper;
+    private final SpelAwareProxyProjectionFactory projectionFactory;
     private @Nullable ApplicationContext applicationContext;
     private @Nullable AutowireCapableBeanFactory beanFactory;
 
@@ -77,12 +80,19 @@ public class MappingUltipaConverter extends AbstractUltipaConverter implements A
         this.typeMapper = UltipaTypeMapper.create(mappingContext);
         this.objectMapper = objectMapper != null ? objectMapper : new ObjectMapper();
         this.proxyFactory = new UltipaProxyFactory();
+        this.projectionFactory = new SpelAwareProxyProjectionFactory();
     }
 
     @Override
     public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
         this.applicationContext = applicationContext;
         this.beanFactory = applicationContext.getAutowireCapableBeanFactory();
+        this.projectionFactory.setBeanFactory(applicationContext);
+    }
+
+    @Override
+    public void setBeanClassLoader(ClassLoader classLoader) {
+        this.projectionFactory.setBeanClassLoader(classLoader);
     }
 
     @Override
@@ -125,6 +135,11 @@ public class MappingUltipaConverter extends AbstractUltipaConverter implements A
             return (R) source;
         }
 
+        // interface projection
+        if (typeToUse.getType().isInterface()) {
+            return readProjection(typeToUse.getType(), source);
+        }
+
         UltipaPersistentEntity<?> entity = mappingContext.getPersistentEntity(typeToUse);
 
         if (entity == null) {
@@ -142,6 +157,10 @@ public class MappingUltipaConverter extends AbstractUltipaConverter implements A
     @Override
     public List<Object> readArray(Schema source) {
         return source.toArray();
+    }
+
+    private <R> R readProjection(Class<R> type, Schema schema) {
+        return projectionFactory.createProjection(type, schema);
     }
 
     private <R> R readEntity(UltipaPersistentEntity<R> entity, Schema source) {
@@ -372,7 +391,7 @@ public class MappingUltipaConverter extends AbstractUltipaConverter implements A
             return;
         }
 
-        String betweenSchemaName = property.getBetweenSchemaName();
+        String edgeName = property.getBetweenEdge();
 
         // Get the schema that already exists
         PersistentPropertyAccessor<?> accessor = entity.getPropertyAccessor(value);
@@ -385,11 +404,11 @@ public class MappingUltipaConverter extends AbstractUltipaConverter implements A
 
         Schema referenceSchema = null;
         if (property.isFromProperty() || property.isLeftProperty()) {
-            referenceSchema = StringUtils.hasText(betweenSchemaName) ? sink.left(betweenSchemaName).left() : sink.left();
+            referenceSchema = StringUtils.hasText(edgeName) ? sink.left(edgeName).left() : sink.left();
         }
 
         if (property.isToProperty() || property.isRightProperty()) {
-            referenceSchema = StringUtils.hasText(betweenSchemaName) ? sink.right(betweenSchemaName).right() : sink.right();
+            referenceSchema = StringUtils.hasText(edgeName) ? sink.right(edgeName).right() : sink.right();
         }
 
         if (referenceSchema != null) {
@@ -399,19 +418,19 @@ public class MappingUltipaConverter extends AbstractUltipaConverter implements A
     }
 
     private void writeReference(UltipaPersistentProperty property, Schema sink, Schema existsSchema) {
-        String betweenSchemaName = property.getBetweenSchemaName();
+        String edgeName = property.getBetweenEdge();
 
         if (property.isFromProperty() || property.isLeftProperty()) {
-            if (StringUtils.hasText(betweenSchemaName)) {
-                sink.left(betweenSchemaName).left(existsSchema);
+            if (StringUtils.hasText(edgeName)) {
+                sink.left(edgeName).left(existsSchema);
             } else {
                 sink.left(existsSchema);
             }
         }
 
         if (property.isToProperty() || property.isRightProperty()) {
-            if (StringUtils.hasText(betweenSchemaName)) {
-                sink.right(betweenSchemaName).right(existsSchema);
+            if (StringUtils.hasText(edgeName)) {
+                sink.right(edgeName).right(existsSchema);
             } else {
                 sink.right(existsSchema);
             }

@@ -8,6 +8,7 @@ import com.ultipa.sdk.operate.entity.*;
 import com.ultipa.sdk.operate.exception.UqlExecutionException;
 import com.ultipa.sdk.operate.response.Response;
 import org.springframework.beans.BeansException;
+import org.springframework.beans.factory.InitializingBean;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
 import org.springframework.dao.IncorrectResultSizeDataAccessException;
@@ -17,6 +18,7 @@ import org.springframework.data.mapping.callback.EntityCallbacks;
 import org.springframework.data.mapping.context.MappingContext;
 import org.springframework.data.ultipa.core.convert.UltipaConverter;
 import org.springframework.data.ultipa.core.exception.QueryException;
+import org.springframework.data.ultipa.core.mapping.UltipaMappingContext;
 import org.springframework.data.ultipa.core.mapping.UltipaPersistentEntity;
 import org.springframework.data.ultipa.core.mapping.UltipaPersistentProperty;
 import org.springframework.data.ultipa.core.mapping.event.BeforeConvertCallback;
@@ -41,7 +43,7 @@ import java.util.stream.Collectors;
  * @author Wangwang Tang
  * @since 1.0
  */
-public class UltipaTemplate implements UltipaOperations, ApplicationContextAware {
+public class UltipaTemplate implements UltipaOperations, ApplicationContextAware, InitializingBean {
 
     private final static String ENTITY_MUST_NOT_BE_NULL = "Entity must not be null!";
     private final static String FIND_NODES_UQL = "find().nodes({ %s }) as nodes return nodes{*}";
@@ -310,7 +312,10 @@ public class UltipaTemplate implements UltipaOperations, ApplicationContextAware
                 return Collections.emptyList();
             }
 
-            return convertSchema(response.get(0));
+            return response.getItems().values().stream()
+                    .map(this::convertSchema)
+                    .flatMap(Collection::stream)
+                    .collect(Collectors.toList());
         } catch (UqlExecutionException e) {
             throw new QueryException(e.getErrorMsg(), e, uql);
         }
@@ -366,6 +371,13 @@ public class UltipaTemplate implements UltipaOperations, ApplicationContextAware
             EntityCallbacks entityCallbacks = EntityCallbacks.create(applicationContext);
             Assert.notNull(entityCallbacks, "EntityCallbacks must not be null!");
             this.entityCallbacks = entityCallbacks;
+        }
+    }
+
+    @Override
+    public void afterPropertiesSet() {
+        if (this.mappingContext instanceof UltipaMappingContext) {
+            ((UltipaMappingContext) this.mappingContext).initializeStructure(this);
         }
     }
 

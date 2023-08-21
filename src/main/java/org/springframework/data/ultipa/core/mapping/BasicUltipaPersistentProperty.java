@@ -13,8 +13,13 @@ import org.springframework.data.mapping.model.FieldNamingStrategy;
 import org.springframework.data.mapping.model.PropertyNameFieldNamingStrategy;
 import org.springframework.data.mapping.model.SimpleTypeHolder;
 import org.springframework.data.ultipa.annotation.*;
+import org.springframework.data.ultipa.core.mapping.model.UltipaEnumTypeHolder;
+import org.springframework.data.ultipa.core.mapping.model.UltipaPropertyTypeHolder;
 import org.springframework.data.ultipa.core.mapping.model.UltipaSimpleTypeHolder;
+import org.springframework.data.ultipa.core.mapping.model.UltipaSystemProperty;
+import org.springframework.data.util.CustomCollections;
 import org.springframework.data.util.Lazy;
+import org.springframework.data.util.TypeInformation;
 import org.springframework.lang.Nullable;
 import org.springframework.util.StringUtils;
 
@@ -34,7 +39,7 @@ public class BasicUltipaPersistentProperty extends AnnotationBasedPersistentProp
 
     private final SimpleTypeHolder simpleTypeHolder;
     private final FieldNamingStrategy fieldNamingStrategy;
-    private final Lazy<Boolean> isEnum = Lazy.of(() -> Enum.class.isAssignableFrom(getType()));
+    private final Lazy<Boolean> isEnum = Lazy.of(() -> Enum.class.isAssignableFrom(getActualType()));
     private final Lazy<Boolean> isReference = Lazy.of(() -> isAnnotationPresent(Reference.class));
     private final Lazy<Boolean> isFrom = Lazy.of(() -> isAnnotationPresent(From.class));
     private final Lazy<Boolean> isTo = Lazy.of(() -> isAnnotationPresent(To.class));
@@ -84,8 +89,44 @@ public class BasicUltipaPersistentProperty extends AnnotationBasedPersistentProp
 
     @Override
     public PropertyType getPropertyType() {
-        // TODO
-        throw new UnsupportedOperationException();
+        PropertyType propertyType = (PropertyType) getAnnotatedValue(Property.class, "type");
+        if (propertyType == PropertyType.AUTO) {
+
+            if (isJson()) {
+                return PropertyType.TEXT;
+            }
+
+            Class<?> type = getActualType();
+
+            if (isEnumProperty()) {
+                EnumType enumType = getRequiredEnumeratedType();
+                // noinspection unchecked,rawtypes
+                Class<?> enumFieldType = UltipaEnumTypeHolder.getEnumFieldType((Class<? extends Enum>) type);
+                if (enumType == EnumType.FIELD && enumFieldType != null) {
+                    type = enumFieldType;
+                } else if (enumType == EnumType.FIELD || enumType == EnumType.NAME) {
+                    type = UltipaEnumTypeHolder.NAME_TYPE;
+                } else {
+                    type = UltipaEnumTypeHolder.ORDINAL_TYPE;
+                }
+            }
+
+            if (!CustomCollections.isMap(type)) {
+                propertyType = UltipaPropertyTypeHolder.getPropertyType(type);
+            }
+
+            if (propertyType != null && isCollectionLike()) {
+                propertyType = UltipaPropertyTypeHolder.getArrayType(propertyType);
+            }
+
+        }
+
+        if (propertyType == null || propertyType == PropertyType.AUTO) {
+            throw new IllegalArgumentException(String.format("Unable to automatically resolve persistent property type for '%s', so configure the persistent property type.",
+                    getPropertyName()));
+        }
+
+        return propertyType;
     }
 
     @Override
@@ -182,14 +223,62 @@ public class BasicUltipaPersistentProperty extends AnnotationBasedPersistentProp
     }
 
     @Override
-    public String getBetweenSchemaName() {
-        if (isLeftProperty()) {
-            return getBetweenSchema(Left.class);
+    public String getBetweenEdge() {
+        String edgeName = getEdgeName();
+        if (StringUtils.hasText(edgeName)) {
+            return edgeName;
         }
-        if (isRightProperty()) {
-            return getBetweenSchema(Right.class);
+        Class<?> edgeClass = getEdgeClass();
+        if (edgeClass != null) {
+            return resolveEdgeName(edgeClass);
         }
         return null;
+    }
+
+    @Override
+    public String getEdgeName() {
+        if (isLeftProperty()) {
+            return getEdgeName(Left.class);
+        }
+        if (isRightProperty()) {
+            return getEdgeName(Right.class);
+        }
+        return null;
+    }
+
+    @Nullable
+    private String getEdgeName(Class<? extends Annotation> annotationType) {
+        String edge = (String) getAnnotatedValue(annotationType, "edge");
+        return StringUtils.hasText(edge) ? edge : null;
+    }
+
+    @Override
+    public Class<?> getEdgeClass() {
+        if (isLeftProperty()) {
+            return getEdgeClass(Left.class);
+        }
+        if (isRightProperty()) {
+            return getEdgeClass(Right.class);
+        }
+        return null;
+    }
+
+    @Nullable
+    private Class<?> getEdgeClass(Class<? extends Annotation> annotationType) {
+        Class<?> edgeClass = (Class<?>) getAnnotatedValue(annotationType, "edgeClass");
+        if (edgeClass == void.class) {
+            return null;
+        }
+        Edge edge = AnnotationUtils.findAnnotation(edgeClass, Edge.class);
+        return edge != null ? edgeClass : null;
+    }
+
+    private String resolveEdgeName(Class<?> type) {
+        Edge edge = AnnotationUtils.findAnnotation(type, Edge.class);
+        if (edge != null && StringUtils.hasText(edge.name())) {
+            return edge.name();
+        }
+        return StringUtils.uncapitalize(type.getSimpleName());
     }
 
     @Override
@@ -200,39 +289,26 @@ public class BasicUltipaPersistentProperty extends AnnotationBasedPersistentProp
         return null;
     }
 
-    @Nullable
-    private String getBetweenSchema(Class<? extends Annotation> annotationType) {
-        String between = (String) getAnnotatedValue(annotationType, "between");
-        Class<?> betweenClass = (Class<?>) getAnnotatedValue(annotationType, "betweenClass");
-
-        if (StringUtils.hasText(between) || betweenClass != void.class) {
-            if (StringUtils.hasText(between)) {
-                return between;
-            }
-            return resolverSchemaName(betweenClass);
-        }
-        return null;
-    }
-
-    private String resolverSchemaName(Class<?> type) {
-        String defaultSchemaName = StringUtils.uncapitalize(type.getSimpleName());
-        Node node = AnnotationUtils.findAnnotation(type, Node.class);
-        Edge edge = AnnotationUtils.findAnnotation(type, Edge.class);
-        if (node != null && edge != null) {
-            throw new IllegalStateException(String.format("%s found multiple schema annotation type annotation exception.", getType()));
-        }
-        if (node != null && StringUtils.hasText(node.name())) {
-            return node.name();
-        }
-        if (edge != null && StringUtils.hasText(edge.name())) {
-            return edge.name();
-        }
-        return defaultSchemaName;
-    }
-
     @Override
     public <E> Object getProperty(E entity) {
         PersistentPropertyAccessor<E> propertyAccessor = getOwner().getPropertyAccessor(entity);
         return propertyAccessor.getProperty(this);
+    }
+
+    /*
+     * (non-Javadoc)
+     * @see org.springframework.data.mapping.PersistentProperty#getPersistentEntityTypeInformation()
+     */
+    @Override
+    public Iterable<? extends TypeInformation<?>> getPersistentEntityTypeInformation() {
+        if (isJson()) {
+            return Collections.emptySet();
+        }
+        return super.getPersistentEntityTypeInformation();
+    }
+
+    @Override
+    public boolean isSystemProperty() {
+        return UltipaSystemProperty.isSystemProperty(getPropertyName());
     }
 }

@@ -74,12 +74,20 @@ public interface UltipaPersistentProperty extends PersistentProperty<UltipaPersi
     FetchType getFetchType();
 
     @Nullable
-    String getBetweenSchemaName();
+    String getBetweenEdge();
+
+    @Nullable
+    String getEdgeName();
+
+    @Nullable
+    Class<?> getEdgeClass();
 
     @Nullable
     Class<?> getReferenceType();
 
     @Nullable
     <E> Object getProperty(E entity);
+
+    boolean isSystemProperty();
 
 }

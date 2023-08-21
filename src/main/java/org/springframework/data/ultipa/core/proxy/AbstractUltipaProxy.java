@@ -63,7 +63,7 @@ abstract class AbstractUltipaProxy implements UltipaProxy {
     protected @Nullable Object target;
     protected final Class<?> sourceType;
     protected final Class<?> targetType;
-    protected final @Nullable String betweenSchema;
+    protected final @Nullable String betweenEdge;
     protected final Lazy<Boolean> isLeft;
     protected final Lazy<Boolean> isRight;
     protected final Lazy<Class<?>> targetClass;
@@ -77,7 +77,7 @@ abstract class AbstractUltipaProxy implements UltipaProxy {
         this.source = source;
         this.sourceType = property.getOwner().getType();
         this.targetType = property.getActualType();
-        this.betweenSchema = property.getBetweenSchemaName();
+        this.betweenEdge = property.getBetweenEdge();
         this.isLeft = Lazy.of(() -> property.isLeftProperty() || property.isFromProperty());
         this.isRight = Lazy.of(() -> property.isRightProperty() || property.isToProperty());
         this.targetClass = Lazy.of(property::getType);
@@ -108,7 +108,7 @@ abstract class AbstractUltipaProxy implements UltipaProxy {
         if (isLeft.get()) {
             if (sourceEntity.isNode()) {
                 if (targetEntity.isNode()) {
-                    Assert.isTrue(StringUtils.hasText(betweenSchema), String.format("No between or betweenClass property found for schema annotation of schema field %s!", field.get()));
+                    Assert.isTrue(StringUtils.hasText(betweenEdge), String.format("No between or betweenClass property found for schema annotation of schema field %s!", field.get()));
                     return operations.createQuery(NODE_TO_PREV_NODE_UQL, paramMap);
                 }
                 if (targetEntity.isEdge()) {
@@ -122,7 +122,7 @@ abstract class AbstractUltipaProxy implements UltipaProxy {
         if (isRight.get()) {
             if (sourceEntity.isNode()) {
                 if (targetEntity.isNode()) {
-                    Assert.isTrue(StringUtils.hasText(betweenSchema), String.format("No between or betweenClass property found for schema annotation of schema field %s!", field.get()));
+                    Assert.isTrue(StringUtils.hasText(betweenEdge), String.format("No between or betweenClass property found for schema annotation of schema field %s!", field.get()));
                     return operations.createQuery(NODE_TO_NEXT_NODE_UQL, paramMap);
                 }
                 if (targetEntity.isEdge()) {
@@ -139,7 +139,7 @@ abstract class AbstractUltipaProxy implements UltipaProxy {
     private Map<String, Object> getParamMap(UltipaPersistentEntity<?> sourceEntity, UltipaPersistentEntity<?> targetEntity) {
         Map<String, Object> paramMap = new HashMap<>();
         paramMap.put("sourceSchemaName", sourceEntity.getSchemaName());
-        paramMap.put("betweenSchemaName", betweenSchema);
+        paramMap.put("betweenSchemaName", betweenEdge);
         paramMap.put("targetSchemaName", targetEntity.getSchemaName());
         paramMap.put("sourceIdKey", sourceEntity.getRequiredIdProperty().getPropertyName());
         paramMap.put("sourceId", sourceId.get());

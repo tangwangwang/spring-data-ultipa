@@ -21,13 +21,13 @@ public @interface Right {
      * two edge schemas.
      * The between class no longer persists any properties, Only to connect to the node or edge.
      */
-    String between() default "";
+    String edge() default "";
 
     /**
-     * (Optional) Type-safe alternative to {@link #between()} for specifying the between schema name in two nodes or two edges.
+     * (Optional) Type-safe alternative to {@link #edge()} for specifying the between schema name in two nodes or two edges.
      * The between class no longer persists any properties, Only to connect to the node or edge.
      */
-    Class<?> betweenClass() default void.class;
+    Class<?> edgeClass() default void.class;
 
     /**
      * (Optional) The operations that must be cascaded to the target of the association.

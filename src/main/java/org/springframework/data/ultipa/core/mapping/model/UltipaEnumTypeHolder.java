@@ -18,6 +18,8 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class UltipaEnumTypeHolder {
 
+    public static final Class<?> NAME_TYPE = String.class;
+    public static final Class<?> ORDINAL_TYPE = int.class;
     /**
      * means empty field
      */
