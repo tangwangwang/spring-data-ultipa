@@ -19,7 +19,7 @@ public enum EnumType {
      */
     ORDINAL,
     /**
-     * Use the other property of an enumeration, Find by {@link EnumValue} annotation
+     * Use the other property of an enumeration, Find by {@link EnumId} annotation
      */
     FIELD,
 

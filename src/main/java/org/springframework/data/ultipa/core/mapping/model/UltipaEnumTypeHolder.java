@@ -1,6 +1,6 @@
 package org.springframework.data.ultipa.core.mapping.model;
 
-import org.springframework.data.ultipa.annotation.EnumValue;
+import org.springframework.data.ultipa.annotation.EnumId;
 import org.springframework.lang.Nullable;
 
 import java.lang.reflect.Field;
@@ -11,7 +11,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Responsible for the conversion of Ultipa data and enumeration types, and parsing fields annotated with
- * {@link EnumValue} in enum classes
+ * {@link EnumId} in enum classes
  *
  * @author Wangwang Tang
  * @since 1.0
@@ -72,7 +72,7 @@ public class UltipaEnumTypeHolder {
 
     private static <E extends Enum<E>> Field resolveEnumField(Class<E> enumType) {
         return ULTIPA_ENUM_TYPES.computeIfAbsent(enumType, key -> Arrays.stream(key.getDeclaredFields())
-                .filter(f -> f.isAnnotationPresent(EnumValue.class))
+                .filter(f -> f.isAnnotationPresent(EnumId.class))
                 .findFirst().orElse(EMPTY_FIELD));
     }
 
