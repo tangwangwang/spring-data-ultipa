@@ -1,6 +1,6 @@
 package org.springframework.data.ultipa.core.mapping.model;
 
-import com.ultipa.sdk.data.Point;
+import org.springframework.data.geo.Point;
 import org.springframework.data.ultipa.annotation.PropertyType;
 import org.springframework.lang.Nullable;
 import org.springframework.util.ClassUtils;
@@ -55,6 +55,7 @@ public class UltipaPropertyTypeHolder {
         defaultMappedTypes.put(BigInteger.class, UINT64);
         defaultMappedTypes.put(BigDecimal.class, DOUBLE);
 
+        defaultMappedTypes.put(com.ultipa.sdk.data.Point.class, POINT);
         defaultMappedTypes.put(Point.class, POINT);
 
         defaultMappedTypes.put(Period.class, STRING);

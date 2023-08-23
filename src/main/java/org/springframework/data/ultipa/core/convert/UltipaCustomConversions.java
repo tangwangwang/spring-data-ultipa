@@ -25,7 +25,8 @@ public class UltipaCustomConversions extends CustomConversions {
         List<Object> converters = new ArrayList<>();
 
         converters.addAll(UltipaConverters.getConvertersToRegister());
-        converters.addAll(UltipaJsr310Converters.getConvertersToRegister());
+        converters.addAll(Jsr310Converters.getConvertersToRegister());
+        converters.addAll(GeoConverters.getConvertersToRegister());
 
         STORE_CONVERTERS = Collections.unmodifiableList(converters);
         STORE_CONVERSIONS = StoreConversions.of(UltipaSimpleTypeHolder.HOLDER, STORE_CONVERTERS);

@@ -22,11 +22,11 @@ import java.util.List;
  * @author Wangwang Tang
  * @since 1.0
  */
-abstract class UltipaJsr310Converters {
+abstract class Jsr310Converters {
 
     private static final ZoneId ZONE = ZoneOffset.UTC;
 
-    private UltipaJsr310Converters() {
+    private Jsr310Converters() {
     }
 
     /**
