@@ -30,7 +30,6 @@ abstract class GeoConverters {
 
         converters.add(PointToStringConverter.INSTANCE);
         converters.add(UltipaPointToGeoPointConverter.INSTANCE);
-        converters.add(UltipaPointToStringConverter.INSTANCE);
         return converters;
     }
 
@@ -51,16 +50,6 @@ abstract class GeoConverters {
         @Override
         public Point convert(com.ultipa.sdk.data.Point source) {
             return new Point(source.getLatitude(), source.getLongitude());
-        }
-    }
-
-    @WritingConverter
-    enum UltipaPointToStringConverter implements Converter<com.ultipa.sdk.data.Point, String> {
-        INSTANCE;
-
-        @Override
-        public String convert(com.ultipa.sdk.data.Point source) {
-            return String.format(POINT_FORMAT, source.getLatitude(), source.getLongitude());
         }
     }
 }
