@@ -2,6 +2,7 @@ package org.springframework.data.ultipa.core.mapping.model;
 
 import org.springframework.data.geo.Point;
 import org.springframework.data.ultipa.annotation.PropertyType;
+import org.springframework.data.util.Pair;
 import org.springframework.lang.Nullable;
 import org.springframework.util.ClassUtils;
 
@@ -21,24 +22,24 @@ import static org.springframework.data.ultipa.annotation.PropertyType.*;
  */
 public class UltipaPropertyTypeHolder {
 
-    private static final Map<PropertyType, PropertyType> ARRAY_MAPPED_TYPES;
+    private static final List<Pair<PropertyType, PropertyType>> ARRAY_MAPPED_TYPES;
     private static final Map<Class<?>, PropertyType> DEFAULT_MAPPED_TYPES;
 
     static {
         // array type mapped
-        Map<PropertyType, PropertyType> arrayMappedTypes = new HashMap<>();
-        arrayMappedTypes.put(STRING, STRING_ARRAY);
-        arrayMappedTypes.put(TEXT, TEXT_ARRAY);
-        arrayMappedTypes.put(INT32, INT32_ARRAY);
-        arrayMappedTypes.put(INT64, INT64_ARRAY);
-        arrayMappedTypes.put(UINT32, UINT32_ARRAY);
-        arrayMappedTypes.put(UINT64, UINT64_ARRAY);
-        arrayMappedTypes.put(FLOAT, FLOAT_ARRAY);
-        arrayMappedTypes.put(DOUBLE, DOUBLE_ARRAY);
-        arrayMappedTypes.put(DATETIME, DATETIME_ARRAY);
-        arrayMappedTypes.put(TIMESTAMP, TIMESTAMP_ARRAY);
+        List<Pair<PropertyType, PropertyType>> arrayMappedTypes = new ArrayList<>();
+        arrayMappedTypes.add(Pair.of(STRING, STRING_ARRAY));
+        arrayMappedTypes.add(Pair.of(TEXT, TEXT_ARRAY));
+        arrayMappedTypes.add(Pair.of(INT32, INT32_ARRAY));
+        arrayMappedTypes.add(Pair.of(INT64, INT64_ARRAY));
+        arrayMappedTypes.add(Pair.of(UINT32, UINT32_ARRAY));
+        arrayMappedTypes.add(Pair.of(UINT64, UINT64_ARRAY));
+        arrayMappedTypes.add(Pair.of(FLOAT, FLOAT_ARRAY));
+        arrayMappedTypes.add(Pair.of(DOUBLE, DOUBLE_ARRAY));
+        arrayMappedTypes.add(Pair.of(DATETIME, DATETIME_ARRAY));
+        arrayMappedTypes.add(Pair.of(TIMESTAMP, TIMESTAMP_ARRAY));
 
-        ARRAY_MAPPED_TYPES = Collections.unmodifiableMap(arrayMappedTypes);
+        ARRAY_MAPPED_TYPES = Collections.unmodifiableList(arrayMappedTypes);
 
         // java type mapped
         Map<Class<?>, PropertyType> defaultMappedTypes = new HashMap<>();
@@ -96,6 +97,25 @@ public class UltipaPropertyTypeHolder {
      */
     @Nullable
     public static PropertyType getArrayType(PropertyType type) {
-        return ARRAY_MAPPED_TYPES.get(type);
+        return ARRAY_MAPPED_TYPES.stream()
+                .filter(it -> it.getFirst() == type)
+                .map(Pair::getSecond)
+                .findFirst()
+                .orElse(null);
+    }
+
+    /**
+     * Returns the mapped persistence simple type.
+     *
+     * @param type must not be {@literal null}.
+     * @return persistence simple type
+     */
+    @Nullable
+    public static PropertyType getSimpleType(PropertyType type) {
+        return ARRAY_MAPPED_TYPES.stream()
+                .filter(it -> it.getSecond() == type)
+                .map(Pair::getFirst)
+                .findFirst()
+                .orElse(null);
     }
 }

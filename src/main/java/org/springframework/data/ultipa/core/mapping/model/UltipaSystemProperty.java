@@ -42,4 +42,17 @@ public enum UltipaSystemProperty {
         }
         return false;
     }
+
+    public static UltipaSystemProperty resolve(String mappedName) {
+        for (UltipaSystemProperty type : values()) {
+            if (Objects.equals(type.mappedName, mappedName)) {
+                return type;
+            }
+        }
+        throw new IllegalArgumentException("No matching constant for [" + mappedName + "]");
+    }
+
+    public boolean isUniqueIdentifier() {
+        return this == ID || this == UUID;
+    }
 }

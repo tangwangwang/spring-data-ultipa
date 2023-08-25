@@ -22,11 +22,6 @@ public @interface Query {
     String value() default "";
 
     /**
-     * The UQL statement for counting the total number of expected results. Only needed for methods returning pages or slices based on custom queries.
-     */
-    String countQuery() default "";
-
-    /**
      * The sort prefix for custom UQL statement, Only needed for methods returning sorts or sorts of pages based on custom queries.
      */
     String sortPrefix() default "";

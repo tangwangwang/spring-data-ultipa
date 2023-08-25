@@ -13,21 +13,21 @@ import java.util.List;
  * @author Wangwang Tang
  * @since 1.0
  */
-interface UltipaQueryExecution {
+public interface UltipaQueryExecution {
 
     @Nullable
-    Object execute(SimpleUltipaQuery ultipaQuery, UltipaParametersParameterAccessor accessor);
+    Object execute(AbstractUltipaQuery ultipaQuery, UltipaParametersParameterAccessor accessor);
 
     static UltipaQueryExecution countExecution() {
         return (ultipaQuery, accessor) -> {
-            Query query = ultipaQuery.createQuery(accessor);
+            Query query = ultipaQuery.createCountQuery(accessor);
             return query.count();
         };
     }
 
     static UltipaQueryExecution existsExecution() {
         return (ultipaQuery, accessor) -> {
-            Query query = ultipaQuery.createQuery(accessor);
+            Query query = ultipaQuery.createExistsQuery(accessor);
             return query.exists();
         };
     }
@@ -86,7 +86,6 @@ interface UltipaQueryExecution {
                 return ultipaQuery.createQuery(accessor).count();
             }
 
-            // TODO proxy returned type
             return ultipaQuery.createQuery(accessor).findOne(returnedType);
         };
     }

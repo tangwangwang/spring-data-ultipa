@@ -93,12 +93,12 @@ public class UltipaTemplate implements UltipaOperations, ApplicationContextAware
     }
 
     @Override
-    public Query createQuery(String uql, Sort sort, String sortPrefix) {
+    public Query createQuery(String uql, Sort sort, @Nullable String sortPrefix) {
         return new AnonymityQuery(this, uql, PARSER, null, sort, sortPrefix);
     }
 
     @Override
-    public Query createQuery(String uql, Pageable pageable, String sortPrefix) {
+    public Query createQuery(String uql, Pageable pageable, @Nullable String sortPrefix) {
         return new AnonymityQuery(this, uql, PARSER, null, pageable, sortPrefix);
     }
 
@@ -114,12 +114,12 @@ public class UltipaTemplate implements UltipaOperations, ApplicationContextAware
     }
 
     @Override
-    public Query createQuery(String uql, Map<String, Object> paramMap, Sort sort, String sortPrefix) {
+    public Query createQuery(String uql, Map<String, Object> paramMap, Sort sort, @Nullable String sortPrefix) {
         return new AnonymityQuery(this, uql, PARSER, paramMap, sort, sortPrefix);
     }
 
     @Override
-    public Query createQuery(String uql, Map<String, Object> paramMap, Pageable pageable, String sortPrefix) {
+    public Query createQuery(String uql, Map<String, Object> paramMap, Pageable pageable, @Nullable String sortPrefix) {
         return new AnonymityQuery(this, uql, PARSER, paramMap, pageable, sortPrefix);
     }
 
@@ -146,7 +146,7 @@ public class UltipaTemplate implements UltipaOperations, ApplicationContextAware
         }
 
         String schemaFilter = "@" + information.getSchemaName();
-        String idFilter = schemaFilter + "." + information.getIdPropertyName() + " == #{id} ";
+        String idFilter = generateIdFilter(information, schemaFilter);
         Map<String, Object> paramMap = new HashMap<>();
         paramMap.put("id", id);
         if (information.isNode()) {
@@ -160,7 +160,7 @@ public class UltipaTemplate implements UltipaOperations, ApplicationContextAware
     public <T> T getById(Object id, Class<T> entityClass) {
         UltipaEntityInformation<T, Object> information = UltipaEntityInformationSupport.getEntityInformation(entityClass, this);
         String schemaFilter = "@" + information.getSchemaName();
-        String idFilter = schemaFilter + "." + information.getIdPropertyName() + " == #{id} ";
+        String idFilter = generateIdFilter(information, schemaFilter);
         Map<String, Object> paramMap = new HashMap<>();
         paramMap.put("id", id);
         if (information.isNode()) {
@@ -168,6 +168,16 @@ public class UltipaTemplate implements UltipaOperations, ApplicationContextAware
         } else {
             return createQuery(String.format(FIND_EDGES_UQL, schemaFilter + " && " + idFilter), paramMap).findOne(entityClass);
         }
+    }
+
+    private <T> String generateIdFilter(UltipaEntityInformation<T, Object> information, String schemaFilter) {
+        String idFilter;
+        if (information.isSystemId()) {
+            idFilter = information.getIdPropertyName() + " == #{id} ";
+        } else {
+            idFilter = schemaFilter + "." + information.getIdPropertyName() + " == #{id} ";
+        }
+        return idFilter;
     }
 
     @Override

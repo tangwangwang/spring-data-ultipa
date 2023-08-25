@@ -20,8 +20,8 @@ import java.util.stream.Collectors;
 @NoRepositoryBean
 public class SimpleUltipaRepository<T, ID> implements UltipaRepository<T, ID> {
 
-    private static final String REMOVE_NODES_UQL = "delete().nodes({ @%s })";
-    private static final String REMOVE_EDGES_UQL = "delete().edges({ @%s })";
+    private static final String REMOVE_NODES_UQL = "delete().nodes({ %s })";
+    private static final String REMOVE_EDGES_UQL = "delete().edges({ %s })";
     private static final String FIND_NODES_UQL = "find().nodes({ %s }) as nodes return nodes{*}";
     private static final String FIND_EDGES_UQL = "find().edges({ %s }) as edges return edges{*}";
     private static final String COUNT_NODES_UQL = "find().nodes({ %s }) as nodes return count(nodes)";
@@ -79,7 +79,7 @@ public class SimpleUltipaRepository<T, ID> implements UltipaRepository<T, ID> {
     @Override
     public Iterable<T> findAllById(Iterable<ID> ids) {
         String schemaFilter = "@" + information.getSchemaName();
-        String idFilter = schemaFilter + "." + information.getIdPropertyName() + " == #{ids} ";
+        String idFilter = generateIdFilter(schemaFilter, true);
 
         Map<String, Object> paramMap = new HashMap<>();
         paramMap.put("ids", ids);
@@ -107,7 +107,7 @@ public class SimpleUltipaRepository<T, ID> implements UltipaRepository<T, ID> {
     @Override
     public void deleteById(ID id) {
         String schemaFilter = "@" + information.getSchemaName();
-        String idFilter = schemaFilter + "." + information.getIdPropertyName() + " == #{id} ";
+        String idFilter = generateIdFilter(schemaFilter, false);
 
         Map<String, Object> paramMap = new HashMap<>();
         paramMap.put("id", id);
@@ -131,7 +131,7 @@ public class SimpleUltipaRepository<T, ID> implements UltipaRepository<T, ID> {
     @Override
     public void deleteAllById(Iterable<? extends ID> ids) {
         String schemaFilter = "@" + information.getSchemaName();
-        String idFilter = schemaFilter + "." + information.getIdPropertyName() + " == #{ids} ";
+        String idFilter = generateIdFilter(schemaFilter, true);
 
         Map<String, Object> paramMap = new HashMap<>();
         paramMap.put("ids", ids);
@@ -185,5 +185,16 @@ public class SimpleUltipaRepository<T, ID> implements UltipaRepository<T, ID> {
                     .findAll(information.getJavaType());
         }
         return new PageImpl<>(result, pageable, count());
+    }
+
+    private String generateIdFilter(String schemaFilter, boolean batch) {
+        String symbols = batch ? " in #{ids} " : " == #{id} ";
+        String idFilter;
+        if (information.isSystemId()) {
+            idFilter = information.getIdPropertyName() + symbols;
+        } else {
+            idFilter = schemaFilter + "." + information.getIdPropertyName() + symbols;
+        }
+        return idFilter;
     }
 }

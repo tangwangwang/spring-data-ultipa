@@ -7,6 +7,7 @@ import org.springframework.context.expression.MapAccessor;
 import org.springframework.core.convert.ConversionService;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.geo.Point;
 import org.springframework.data.ultipa.core.UltipaOperations;
 import org.springframework.data.ultipa.core.convert.UltipaConverter;
 import org.springframework.data.ultipa.core.exception.ParameterBindingException;
@@ -23,10 +24,7 @@ import org.springframework.util.PropertyPlaceholderHelper;
 import org.springframework.util.StringUtils;
 
 import java.sql.Timestamp;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
+import java.time.*;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Stream;
@@ -42,7 +40,9 @@ public class Query {
             Enum.class, Date.class, Timestamp.class, Instant.class,
             LocalDate.class, LocalTime.class, LocalDateTime.class
     );
-    private final static List<Class<?>> timeTypes = Arrays.asList(Date.class, Instant.class, LocalDate.class, LocalTime.class, LocalDateTime.class);
+    private final static List<Class<?>> pointTypes = Arrays.asList(Point.class, com.ultipa.sdk.data.Point.class);
+    private final static List<Class<?>> datetimeTypes = Arrays.asList(LocalDate.class, LocalTime.class, LocalDateTime.class);
+    private final static List<Class<?>> timestampTypes = Arrays.asList(Instant.class, ZonedDateTime.class, Date.class, Timestamp.class);
     private final UltipaOperations operations;
     private final UltipaConverter converter;
     private final ExpressionParser parser;
@@ -187,7 +187,7 @@ public class Query {
     }
 
     public boolean exists() {
-        return operations.findAll(formatUql()).size() > 0;
+        return !operations.findAll(formatUql()).isEmpty();
     }
 
     /**
@@ -310,7 +310,7 @@ public class Query {
 
         Object value = readValue(placeholders[0].trim());
 
-        return formatValue(value, placeholders[1]);
+        return placeholders.length > 1 ? formatValue(value, placeholders[1]) : value;
     }
 
     @Nullable
@@ -380,34 +380,26 @@ public class Query {
         return value;
     }
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
+
     private String convertUqlValue(@Nullable Object value) {
-        ConversionService conversionService = converter.getConversionService();
-        if (value == null) {
-            return "null";
+        // handle enumeration
+        if (isEnumType(value)) {
+            value = getEnumTypeConvertedUqlWrite(value);
         }
 
-        Class<?> valueType = value.getClass();
-
-        // handle enumeration
-        if (Enum.class.isAssignableFrom(valueType)) {
-            Class<? extends Enum> enumType = (Class<? extends Enum>) valueType;
-            if (UltipaEnumTypeHolder.hasEnumField(enumType)) {
-                PropertyAccessor enumAccessor = new BeanWrapperImpl(value);
-                value = enumAccessor.getPropertyValue(UltipaEnumTypeHolder.getRequiredEnumField(enumType).getName());
-            } else {
-                value = ((Enum<?>) value).name();
-            }
+        // handle Point
+        if (isConvertedType(value, pointTypes)) {
+            value = getPointTypeConvertedUqlWrite(value);
         }
 
         // handle datetime
-        for (Class<?> timeType : timeTypes) {
-            if (valueType == timeType || timeType.isAssignableFrom(valueType)) {
-                return Optional.ofNullable(value)
-                        .map(v -> conversionService.convert(v, LocalDateTime.class))
-                        .map(d -> conversionService.convert(d, String.class))
-                        .orElse("null");
-            }
+        if (isConvertedType(value, datetimeTypes)) {
+            value = getDatetimeTypeConvertedUqlWrite(value);
+        }
+
+        // handle timestamp
+        if (isConvertedType(value, timestampTypes)) {
+            value = getTimestampTypeConvertedUqlWrite(value);
         }
 
         return Optional.ofNullable(value)
@@ -416,6 +408,64 @@ public class Query {
                 .map(v -> v.replace("\\", "\\\\"))
                 .map(v -> v.replace("\"", "\\\""))
                 .orElse("null");
+    }
+
+    private boolean isEnumType(@Nullable Object value) {
+        if (value == null) {
+            return false;
+        }
+        return Enum.class.isAssignableFrom(value.getClass());
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    @Nullable
+    private Object getEnumTypeConvertedUqlWrite(Object value) {
+        Class<? extends Enum> enumType = (Class<? extends Enum>) value.getClass();
+        if (UltipaEnumTypeHolder.hasEnumField(enumType)) {
+            PropertyAccessor enumAccessor = new BeanWrapperImpl(value);
+            return enumAccessor.getPropertyValue(UltipaEnumTypeHolder.getRequiredEnumField(enumType).getName());
+        } else {
+            return ((Enum<?>) value).name();
+        }
+    }
+
+    private boolean isConvertedType(@Nullable Object value, List<Class<?>> convertedTypes) {
+        if (value == null) {
+            return false;
+        }
+        for (Class<?> datetimeType : convertedTypes) {
+            if (value.getClass() == datetimeType || datetimeType.isAssignableFrom(value.getClass())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Nullable
+    private String getPointTypeConvertedUqlWrite(Object value) {
+        ConversionService conversionService = converter.getConversionService();
+        return Optional.of(value)
+                .map(it -> conversionService.convert(it, Point.class))
+                .map(it -> conversionService.convert(it, String.class))
+                .orElse(null);
+    }
+
+    @Nullable
+    private String getDatetimeTypeConvertedUqlWrite(Object value) {
+        ConversionService conversionService = converter.getConversionService();
+        return Optional.of(value)
+                .map(it -> conversionService.convert(it, LocalDateTime.class))
+                .map(it -> conversionService.convert(it, String.class))
+                .orElse(null);
+    }
+
+    @Nullable
+    private String getTimestampTypeConvertedUqlWrite(Object value) {
+        ConversionService conversionService = converter.getConversionService();
+        return Optional.of(value)
+                .map(it -> conversionService.convert(it, Date.class))
+                .map(it -> conversionService.convert(it, String.class))
+                .orElse(null);
     }
 
 }

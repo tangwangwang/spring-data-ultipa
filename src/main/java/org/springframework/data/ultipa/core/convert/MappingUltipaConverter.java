@@ -13,6 +13,7 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
 import org.springframework.context.expression.MapAccessor;
 import org.springframework.core.convert.support.DefaultConversionService;
+import org.springframework.data.geo.Point;
 import org.springframework.data.mapping.InstanceCreatorMetadata;
 import org.springframework.data.mapping.MappingException;
 import org.springframework.data.mapping.Parameter;
@@ -20,19 +21,20 @@ import org.springframework.data.mapping.PersistentPropertyAccessor;
 import org.springframework.data.mapping.context.MappingContext;
 import org.springframework.data.mapping.model.*;
 import org.springframework.data.projection.SpelAwareProxyProjectionFactory;
-import org.springframework.data.ultipa.annotation.CascadeType;
-import org.springframework.data.ultipa.annotation.EnumType;
-import org.springframework.data.ultipa.annotation.FetchType;
-import org.springframework.data.ultipa.annotation.GeneratedValue;
+import org.springframework.data.ultipa.annotation.*;
 import org.springframework.data.ultipa.core.UltipaOperations;
 import org.springframework.data.ultipa.core.mapping.UltipaPersistentEntity;
 import org.springframework.data.ultipa.core.mapping.UltipaPersistentProperty;
 import org.springframework.data.ultipa.core.mapping.model.UltipaEnumTypeHolder;
+import org.springframework.data.ultipa.core.mapping.model.UltipaPropertyTypeHolder;
+import org.springframework.data.ultipa.core.mapping.model.UltipaSystemProperty;
 import org.springframework.data.ultipa.core.proxy.UltipaProxy;
 import org.springframework.data.ultipa.core.proxy.UltipaProxyFactory;
 import org.springframework.data.ultipa.core.schema.IdGenerator;
 import org.springframework.data.ultipa.core.schema.Schema;
 import org.springframework.data.util.ClassTypeInformation;
+import org.springframework.data.util.CustomCollections;
+import org.springframework.data.util.StreamUtils;
 import org.springframework.data.util.TypeInformation;
 import org.springframework.lang.Nullable;
 import org.springframework.util.Assert;
@@ -42,8 +44,11 @@ import org.springframework.util.StringUtils;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Type;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * {@link UltipaConverter} implementation uses a {@link MappingContext} to do sophisticated mapping of domain objects
@@ -160,7 +165,10 @@ public class MappingUltipaConverter extends AbstractUltipaConverter implements A
     }
 
     private <R> R readProjection(Class<R> type, Schema schema) {
-        return projectionFactory.createProjection(type, schema);
+        if (CustomCollections.isCollection(type)) {
+            return projectionFactory.createProjection(type, schema.toArray());
+        }
+        return projectionFactory.createProjection(type, schema.toMap());
     }
 
     private <R> R readEntity(UltipaPersistentEntity<R> entity, Schema source) {
@@ -303,7 +311,6 @@ public class MappingUltipaConverter extends AbstractUltipaConverter implements A
 
     @SuppressWarnings("unchecked")
     private void writeInternal(Object source, Schema sink, UltipaPersistentEntity<?> entity) {
-        sink.setSource(source);
         sink.setName(entity.getSchemaName());
         PersistentPropertyAccessor<?> accessor = entity.getPropertyAccessor(source);
 
@@ -339,7 +346,7 @@ public class MappingUltipaConverter extends AbstractUltipaConverter implements A
                 continue;
             }
 
-            Object convertedValue = getPotentiallyConvertedSimpleWrite(value);
+            Object convertedValue = getPotentiallyConvertedSimpleWrite(value, property.getPropertyType());
             sink.put(property.getPropertyName(), convertedValue);
         }
 
@@ -347,9 +354,12 @@ public class MappingUltipaConverter extends AbstractUltipaConverter implements A
             Object value = accessor.getProperty(property);
             if (value != null) {
                 if (value.getClass().isArray()) {
-                    Arrays.asList((Object[]) value).forEach(element -> writeReference(element, property, sink));
+                    CollectionUtils.arrayToList(value).forEach(element -> writeReference(element, property, sink));
                 } else if (value instanceof Iterable) {
                     ((Iterable<Object>) value).forEach(element -> writeReference(element, property, sink));
+                } else if (CustomCollections.isCollection(value.getClass())) {
+                    // noinspection DataFlowIssue
+                    ((Collection<?>) value).forEach(element -> writeReference(element, property, sink));
                 } else {
                     writeReference(value, property, sink);
                 }
@@ -370,10 +380,14 @@ public class MappingUltipaConverter extends AbstractUltipaConverter implements A
             sink.setNew(true);
             idValue = computeId(property, source);
             sink.setIdValue(idValue);
-            if (idValue == null && !Arrays.asList(Schema.ID_FIELD_NAME, Schema.UUID_FIELD_NAME).contains(property.getPropertyName())) {
-                throw new IllegalArgumentException(String.format("%s is the primary key of %s, neither generator reference nor generator class configured.",
-                        property.getPropertyName(), property.getOwner().getSchemaName()));
+            Boolean isUniqueIdentifier = Optional.ofNullable(property.getSystemProperty())
+                    .map(UltipaSystemProperty::isUniqueIdentifier)
+                    .orElse(false);
+            if (idValue != null || isUniqueIdentifier) {
+                return;
             }
+            throw new IllegalArgumentException(String.format("%s is the primary key of %s, neither generator reference nor generator class configured.",
+                    property.getPropertyName(), property.getOwner().getSchemaName()));
         }
     }
 
@@ -394,9 +408,7 @@ public class MappingUltipaConverter extends AbstractUltipaConverter implements A
         String edgeName = property.getBetweenEdge();
 
         // Get the schema that already exists
-        PersistentPropertyAccessor<?> accessor = entity.getPropertyAccessor(value);
-        Object id = accessor.getProperty(entity.getRequiredIdProperty());
-        Schema schema = sink.find(entity.getSchemaName(), id == null ? value : id);
+        Schema schema = sink.find(entity.getSchemaName(), value);
         if (schema != null) {
             writeReference(property, sink, schema);
             return;
@@ -492,13 +504,61 @@ public class MappingUltipaConverter extends AbstractUltipaConverter implements A
     }
 
     @Nullable
-    private Object getPotentiallyConvertedSimpleWrite(@Nullable Object value) {
-        if (value instanceof Number) {
+    private Object getPotentiallyConvertedSimpleWrite(@Nullable Object value, @Nullable PropertyType propertyType) {
+        if (value == null || propertyType == null) {
             return value;
         }
-        return Optional.ofNullable(value)
-                .map(v -> conversionService.convert(v, String.class))
-                .orElse(null);
+        switch (propertyType) {
+            case STRING:
+            case TEXT:
+                return conversionService.convert(value, String.class);
+            case INT32:
+            case UINT32:
+            case INT64:
+            case UINT64:
+            case FLOAT:
+            case DOUBLE:
+                return conversionService.convert(value, Number.class);
+            case POINT:
+                return conversionService.convert(value, Point.class);
+            case DATETIME:
+                return conversionService.convert(value, LocalDateTime.class);
+            case TIMESTAMP:
+                return conversionService.convert(value, Date.class);
+            case STRING_ARRAY:
+            case TEXT_ARRAY:
+            case INT32_ARRAY:
+            case UINT32_ARRAY:
+            case INT64_ARRAY:
+            case UINT64_ARRAY:
+            case FLOAT_ARRAY:
+            case DOUBLE_ARRAY:
+            case DATETIME_ARRAY:
+            case TIMESTAMP_ARRAY:
+                PropertyType simpleType = UltipaPropertyTypeHolder.getSimpleType(propertyType);
+                Class<?> valueClass = value.getClass();
+                Stream<?> stream = null;
+                if (valueClass.isArray()) {
+                    stream = CollectionUtils.arrayToList(value).stream();
+                }
+
+                if (Iterable.class.isAssignableFrom(valueClass)) {
+                    stream = StreamUtils.createStreamFromIterator(((Iterable<?>) value).iterator());
+                }
+
+                if (CustomCollections.isCollection(valueClass)) {
+                    stream = ((Collection<?>) value).stream();
+                }
+
+                if (stream != null) {
+                    return stream
+                            .map(it -> getPotentiallyConvertedSimpleWrite(it, simpleType))
+                            .collect(Collectors.toList());
+                }
+                return value;
+            default:
+                return value;
+        }
     }
 
     private <T> T createBeanOrInstantiate(Class<T> t) {

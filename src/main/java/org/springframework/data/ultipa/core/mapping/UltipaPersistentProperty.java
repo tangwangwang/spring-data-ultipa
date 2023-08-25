@@ -5,6 +5,7 @@ import org.springframework.data.ultipa.annotation.CascadeType;
 import org.springframework.data.ultipa.annotation.EnumType;
 import org.springframework.data.ultipa.annotation.FetchType;
 import org.springframework.data.ultipa.annotation.PropertyType;
+import org.springframework.data.ultipa.core.mapping.model.UltipaSystemProperty;
 import org.springframework.lang.Nullable;
 
 import java.util.List;
@@ -51,7 +52,7 @@ public interface UltipaPersistentProperty extends PersistentProperty<UltipaPersi
     default EnumType getRequiredEnumeratedType() {
         EnumType enumeratedType = getEnumeratedType();
         if (enumeratedType == null) {
-            throw new IllegalStateException();
+            throw new IllegalStateException(String.format("Required enumerated type not found for %s", getPropertyName()));
         }
         return enumeratedType;
     }
@@ -89,5 +90,16 @@ public interface UltipaPersistentProperty extends PersistentProperty<UltipaPersi
     <E> Object getProperty(E entity);
 
     boolean isSystemProperty();
+
+    @Nullable
+    UltipaSystemProperty getSystemProperty();
+
+    default UltipaSystemProperty getRequiredSystemProperty() {
+        UltipaSystemProperty systemProperty = getSystemProperty();
+        if (systemProperty == null) {
+            throw new IllegalStateException(String.format("Required system property not found for %s", getPropertyName()));
+        }
+        return systemProperty;
+    }
 
 }

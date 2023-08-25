@@ -81,7 +81,6 @@ public class DefaultUltipaTypeMapper extends DefaultTypeMapper<Schema> implement
     /**
      * {@link TypeAliasAccessor} to store aliases in a {@link Schema}.
      *
-     * @author Oliver Gierke
      */
     public static final class SchemaTypeAliasAccessor implements TypeAliasAccessor<Schema> {
 

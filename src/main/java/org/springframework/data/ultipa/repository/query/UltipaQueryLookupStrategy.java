@@ -5,6 +5,7 @@ import org.springframework.data.projection.ProjectionFactory;
 import org.springframework.data.repository.core.NamedQueries;
 import org.springframework.data.repository.core.RepositoryMetadata;
 import org.springframework.data.repository.query.QueryLookupStrategy;
+import org.springframework.data.repository.query.QueryLookupStrategy.Key;
 import org.springframework.data.repository.query.QueryMethod;
 import org.springframework.data.repository.query.QueryMethodEvaluationContextProvider;
 import org.springframework.data.repository.query.RepositoryQuery;
@@ -22,25 +23,9 @@ import java.lang.reflect.Method;
  * @author Wangwang Tang
  * @since 1.0
  */
-public abstract class UltipaQueryLookupStrategy implements QueryLookupStrategy {
+public final class UltipaQueryLookupStrategy {
 
-    protected final UltipaOperations operations;
-    protected final MappingContext<? extends UltipaPersistentEntity<?>, UltipaPersistentProperty> mappingContext;
-
-    private UltipaQueryLookupStrategy(UltipaOperations operations) {
-        this.operations = operations;
-        this.mappingContext = operations.getConverter().getMappingContext();
-    }
-
-    /* (non-Javadoc)
-     * @see org.springframework.data.repository.query.QueryLookupStrategy#resolveQuery(java.lang.reflect.Method, org.springframework.data.repository.core.RepositoryMetadata, org.springframework.data.projection.ProjectionFactory, org.springframework.data.repository.core.NamedQueries)
-     */
-    @Override
-    public final RepositoryQuery resolveQuery(Method method, RepositoryMetadata metadata, ProjectionFactory factory, NamedQueries namedQueries) {
-        return resolveQuery(new UltipaQueryMethod(method, metadata, factory), operations, namedQueries);
-    }
-
-    protected abstract RepositoryQuery resolveQuery(UltipaQueryMethod method, UltipaOperations operations, NamedQueries namedQueries);
+    private UltipaQueryLookupStrategy() {}
 
     public static QueryLookupStrategy create(UltipaOperations operations, @Nullable Key key, QueryMethodEvaluationContextProvider evaluationContextProvider) {
 
@@ -51,14 +36,35 @@ public abstract class UltipaQueryLookupStrategy implements QueryLookupStrategy {
             case CREATE:
                 return new CreateQueryLookupStrategy(operations);
             case USE_DECLARED_QUERY:
-                return new DeclaredQueryLookupStrategy(operations, evaluationContextProvider);
+                return new DeclaredQueryLookupStrategy(operations);
             case CREATE_IF_NOT_FOUND:
                 return new CreateIfNotFoundQueryLookupStrategy(operations,
                         new CreateQueryLookupStrategy(operations),
-                        new DeclaredQueryLookupStrategy(operations, evaluationContextProvider));
+                        new DeclaredQueryLookupStrategy(operations));
             default:
                 throw new IllegalArgumentException(String.format("Unsupported query lookup strategy %s!", key));
         }
+    }
+
+    private abstract static class AbstractQueryLookupStrategy implements QueryLookupStrategy {
+        protected final UltipaOperations operations;
+        protected final MappingContext<? extends UltipaPersistentEntity<?>, UltipaPersistentProperty> mappingContext;
+
+        private AbstractQueryLookupStrategy(UltipaOperations operations) {
+            this.operations = operations;
+            this.mappingContext = operations.getConverter().getMappingContext();
+        }
+
+        /* (non-Javadoc)
+         * @see org.springframework.data.repository.query.QueryLookupStrategy#resolveQuery(java.lang.reflect.Method, org.springframework.data.repository.core.RepositoryMetadata, org.springframework.data.projection.ProjectionFactory, org.springframework.data.repository.core.NamedQueries)
+         */
+        @Override
+        public final RepositoryQuery resolveQuery(Method method, RepositoryMetadata metadata, ProjectionFactory factory, NamedQueries namedQueries) {
+            return resolveQuery(new UltipaQueryMethod(method, metadata, factory), operations, namedQueries);
+        }
+
+        protected abstract RepositoryQuery resolveQuery(UltipaQueryMethod method, UltipaOperations operations, NamedQueries namedQueries);
+
     }
 
     private enum NoQuery implements RepositoryQuery {
@@ -75,7 +81,7 @@ public abstract class UltipaQueryLookupStrategy implements QueryLookupStrategy {
         }
     }
 
-    private static class CreateIfNotFoundQueryLookupStrategy extends UltipaQueryLookupStrategy {
+    private static class CreateIfNotFoundQueryLookupStrategy extends AbstractQueryLookupStrategy {
 
         private final CreateQueryLookupStrategy createStrategy;
         private final DeclaredQueryLookupStrategy declaredStrategy;
@@ -100,7 +106,7 @@ public abstract class UltipaQueryLookupStrategy implements QueryLookupStrategy {
         }
     }
 
-    private static class CreateQueryLookupStrategy extends UltipaQueryLookupStrategy {
+    private static class CreateQueryLookupStrategy extends AbstractQueryLookupStrategy {
 
         CreateQueryLookupStrategy(UltipaOperations operations) {
             super(operations);
@@ -113,15 +119,18 @@ public abstract class UltipaQueryLookupStrategy implements QueryLookupStrategy {
         }
     }
 
-    static class DeclaredQueryLookupStrategy extends UltipaQueryLookupStrategy {
+    static class DeclaredQueryLookupStrategy extends AbstractQueryLookupStrategy {
 
-        DeclaredQueryLookupStrategy(UltipaOperations operations, QueryMethodEvaluationContextProvider evaluationContextProvider) {
+
+        DeclaredQueryLookupStrategy(UltipaOperations operations) {
             super(operations);
         }
 
         @Override
         protected RepositoryQuery resolveQuery(UltipaQueryMethod method, UltipaOperations operations, NamedQueries namedQueries) {
-            // TODO resolve declared query
+            if (method.hasAnnotatedQuery()) {
+                return new StringBasedUltipaQuery(method, operations);
+            }
 
             return NoQuery.INSTANCE;
         }

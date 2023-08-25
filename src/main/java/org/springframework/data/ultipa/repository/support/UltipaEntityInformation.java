@@ -12,6 +12,8 @@ public interface UltipaEntityInformation<T, ID> extends EntityInformation<T, ID>
 
     String getIdPropertyName();
 
+    boolean isSystemId();
+
     boolean isNode();
 
     boolean isEdge();

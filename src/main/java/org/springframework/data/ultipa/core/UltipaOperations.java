@@ -27,17 +27,17 @@ public interface UltipaOperations {
 
     Query createQuery(String uql, Pageable pageable);
 
-    Query createQuery(String uql, Sort sort, String sortPrefix);
+    Query createQuery(String uql, Sort sort, @Nullable String sortPrefix);
 
-    Query createQuery(String uql, Pageable pageable, String sortPrefix);
+    Query createQuery(String uql, Pageable pageable, @Nullable String sortPrefix);
 
     Query createQuery(String uql, Map<String, Object> paramMap, Sort sort);
 
     Query createQuery(String uql, Map<String, Object> paramMap, Pageable pageable);
 
-    Query createQuery(String uql, Map<String, Object> paramMap, Sort sort, String sortPrefix);
+    Query createQuery(String uql, Map<String, Object> paramMap, Sort sort, @Nullable String sortPrefix);
 
-    Query createQuery(String uql, Map<String, Object> paramMap, Pageable pageable, String sortPrefix);
+    Query createQuery(String uql, Map<String, Object> paramMap, Pageable pageable, @Nullable String sortPrefix);
 
     <T> T save(T entity);
 

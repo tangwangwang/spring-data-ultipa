@@ -311,4 +311,9 @@ public class BasicUltipaPersistentProperty extends AnnotationBasedPersistentProp
     public boolean isSystemProperty() {
         return UltipaSystemProperty.isSystemProperty(getPropertyName());
     }
+
+    @Override
+    public UltipaSystemProperty getSystemProperty() {
+        return isSystemProperty() ? UltipaSystemProperty.resolve(getPropertyName()) : null;
+    }
 }

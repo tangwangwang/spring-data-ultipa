@@ -34,6 +34,11 @@ public class MappingUltipaEntityInformation<T, ID> extends UltipaEntityInformati
     }
 
     @Override
+    public boolean isSystemId() {
+        return entity.getRequiredIdProperty().isSystemProperty();
+    }
+
+    @Override
     public boolean isNode() {
         return entity.isNode();
     }
