@@ -12,6 +12,7 @@ import org.springframework.data.ultipa.core.UltipaOperations;
 import org.springframework.data.ultipa.core.convert.UltipaConverter;
 import org.springframework.data.ultipa.core.exception.ParameterBindingException;
 import org.springframework.data.ultipa.core.mapping.model.UltipaEnumTypeHolder;
+import org.springframework.data.ultipa.core.mapping.model.UltipaSystemProperty;
 import org.springframework.expression.Expression;
 import org.springframework.expression.ExpressionException;
 import org.springframework.expression.ExpressionParser;
@@ -407,7 +408,7 @@ public class Query {
                 // because ultipa db interpret character \\t as \t, so need to replace \\t as \\\\t to keep character \\t
                 .map(v -> v.replace("\\", "\\\\"))
                 .map(v -> v.replace("\"", "\\\""))
-                .orElse("null");
+                .orElse(UltipaSystemProperty.NULL_VALUE);
     }
 
     private boolean isEnumType(@Nullable Object value) {

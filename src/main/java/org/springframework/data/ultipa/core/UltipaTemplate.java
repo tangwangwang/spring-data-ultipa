@@ -16,13 +16,18 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.mapping.callback.EntityCallbacks;
 import org.springframework.data.mapping.context.MappingContext;
+import org.springframework.data.ultipa.annotation.CascadeType;
 import org.springframework.data.ultipa.core.convert.UltipaConverter;
 import org.springframework.data.ultipa.core.exception.QueryException;
 import org.springframework.data.ultipa.core.mapping.UltipaMappingContext;
 import org.springframework.data.ultipa.core.mapping.UltipaPersistentEntity;
 import org.springframework.data.ultipa.core.mapping.UltipaPersistentProperty;
 import org.springframework.data.ultipa.core.mapping.event.BeforeConvertCallback;
+import org.springframework.data.ultipa.core.mapping.model.UltipaSystemProperty;
 import org.springframework.data.ultipa.core.query.Query;
+import org.springframework.data.ultipa.core.schema.EdgeSchema;
+import org.springframework.data.ultipa.core.schema.NodeSchema;
+import org.springframework.data.ultipa.core.schema.PersistSchema;
 import org.springframework.data.ultipa.core.schema.Schema;
 import org.springframework.data.ultipa.repository.support.UltipaEntityInformation;
 import org.springframework.data.ultipa.repository.support.UltipaEntityInformationSupport;
@@ -131,6 +136,111 @@ public class UltipaTemplate implements UltipaOperations, ApplicationContextAware
     @Override
     public <T> T update(T entity) {
         return doSave(entity, false);
+    }
+
+    @SuppressWarnings("unchecked")
+    private <T> T doSave(T entity, boolean isNew) {
+        Assert.notNull(entity, ENTITY_MUST_NOT_BE_NULL);
+
+        Class<?> entityType = ClassUtils.getUserClass(entity);
+        UltipaPersistentEntity<T> entityMetadata = (UltipaPersistentEntity<T>) mappingContext.getRequiredPersistentEntity(entityType);
+
+        if (!entityMetadata.isSchema()) {
+            throw new IllegalArgumentException(String.format("%s must be a valid Node or a valid Edge!", entityType.getName()));
+        }
+
+        if (isNew != entityMetadata.isNew(entity)) {
+            String message = isNew ? "Entity must be new object!" : "Entity must not be new object!";
+            throw new IllegalArgumentException(message);
+        }
+        return doSave(entity, entityMetadata, isNew ? CascadeType.PERSIST : CascadeType.UPDATE);
+    }
+
+    private <T> T doSave(T entity, UltipaPersistentEntity<T> entityMetadata, CascadeType cascade) {
+        Schema savedSchema = null;
+        if (entityMetadata.isNode()) {
+            NodeSchema node = NodeSchema.of(entity);
+            this.converter.write(entity, node, cascade);
+            savedSchema = doSaveNode(node);
+        }
+        if (entityMetadata.isEdge()) {
+            EdgeSchema edge = EdgeSchema.of(entity);
+            this.converter.write(entity, edge, cascade);
+            savedSchema = doSaveEdge(edge);
+        }
+        if (savedSchema == null) {
+            throw new IllegalArgumentException(String.format("%s must be a valid Node or a valid Edge!", entityMetadata.getType().getName()));
+        }
+
+        return this.converter.read(entityMetadata.getType(), savedSchema);
+    }
+
+    private Schema doSaveNode(NodeSchema node) {
+        if (node.isPersisted()) {
+            return node;
+        }
+
+        // persist node
+        Schema savedSchema = doSavePersistSchema(node);
+        Long uuid = (Long) savedSchema.get(UltipaSystemProperty.UUID.getMappedName());
+        node.setSystemUuid(uuid);
+        String id = (String) savedSchema.get(UltipaSystemProperty.ID.getMappedName());
+        node.setSystemId(id);
+        node.persisted();
+
+        // persist left and right
+        node.around().forEach(this::doSaveEdge);
+
+        return savedSchema;
+    }
+
+    private Schema doSaveEdge(EdgeSchema edge) {
+        // persist from and to
+        edge.around().forEach(this::doSaveNode);
+
+        if (edge.isPersisted()) {
+            return edge;
+        }
+
+        // persist edge
+        Schema savedSchema = doSavePersistSchema(edge);
+        Long uuid = (Long) savedSchema.get(UltipaSystemProperty.UUID.getMappedName());
+        edge.setSystemUuid(uuid);
+        edge.persisted();
+
+        return savedSchema;
+    }
+
+    private Schema doSavePersistSchema(PersistSchema schema) {
+        Object entity = maybeCallBeforeConvert(schema.getSource(), schema.getSchema());
+        if (entity != null) {
+            this.converter.write(entity, schema);
+        }
+
+        String uql = schema.toUqlString();
+        List<Schema> result = doExecute(uql);
+
+        if (schema.getIsNew() == null) {
+            return schema;
+        }
+
+        if (result.isEmpty()) {
+            throw new QueryException("Persist entity error.", uql);
+        }
+        return result.get(0);
+    }
+
+    @Nullable
+    private <T> T maybeCallBeforeConvert(@Nullable T entity, @Nullable String schema) {
+        if (entity == null) {
+            return null;
+        }
+
+        if (entityCallbacks != null) {
+            return entityCallbacks.callback(BeforeConvertCallback.class, entity, schema);
+        }
+
+        return entity;
     }
 
     @SuppressWarnings("unchecked")
@@ -247,59 +357,6 @@ public class UltipaTemplate implements UltipaOperations, ApplicationContextAware
         return schemas.stream().map(this.converter::readArray).collect(Collectors.toList());
     }
 
-    @SuppressWarnings("unchecked")
-    private <T> T doSave(T entity, boolean isNew) {
-        Assert.notNull(entity, ENTITY_MUST_NOT_BE_NULL);
-
-        Class<?> entityType = ClassUtils.getUserClass(entity);
-        UltipaPersistentEntity<T> entityMetadata = (UltipaPersistentEntity<T>) mappingContext.getRequiredPersistentEntity(entityType);
-
-        if (!entityMetadata.isSchema()) {
-            throw new IllegalArgumentException(String.format("%s must be a valid Node or a valid Edge!", entityType.getName()));
-        }
-
-        if (isNew != entityMetadata.isNew(entity)) {
-            if (isNew) {
-                throw new IllegalArgumentException("Entity must be new object!");
-            } else {
-                throw new IllegalArgumentException("Entity must not be new object!");
-            }
-        }
-        return doSave(entity, entityMetadata);
-    }
-
-    private <T> T doSave(T entity, UltipaPersistentEntity<T> entityMetadata) {
-        entity = maybeCallBeforeConvert(entity, entityMetadata.getSchemaName());
-
-        Schema schema = createSchema(entityMetadata);
-        this.converter.write(entity, schema);
-
-        String uql = schema.toUql();
-        List<Schema> result = doExecute(uql);
-        if (result.isEmpty()) {
-            throw new QueryException("Persist entity error.", uql);
-        }
-        return this.converter.read(entityMetadata.getType(), result.get(0));
-    }
-
-    private Schema createSchema(UltipaPersistentEntity<?> entityMetadata) {
-        if (entityMetadata.isNode()) {
-            return Schema.createNode();
-        }
-        if (entityMetadata.isEdge()) {
-            return Schema.createEdge();
-        }
-        throw new IllegalArgumentException(String.format("%s must be a valid Node or a valid Edge!", entityMetadata.getType().getName()));
-    }
-
-    private <T> T maybeCallBeforeConvert(T entity, String schema) {
-        if (entityCallbacks != null) {
-            return entityCallbacks.callback(BeforeConvertCallback.class, entity, schema);
-        }
-
-        return entity;
-    }
-
     private List<Schema> doExecute(String uql) {
         try {
             Connection connection = clientDriver.getConnection();
@@ -338,10 +395,10 @@ public class UltipaTemplate implements UltipaOperations, ApplicationContextAware
         List<Schema> result = new ArrayList<>();
         dataItem.getEntities().forEach(uqlEntity -> {
             if (uqlEntity instanceof Node) {
-                result.add(Schema.from((Node) uqlEntity));
+                result.add(Schema.of((Node) uqlEntity));
             }
             if (uqlEntity instanceof Edge) {
-                result.add(Schema.from((Edge) uqlEntity));
+                result.add(Schema.of((Edge) uqlEntity));
             }
             if (uqlEntity instanceof Attr) {
                 String name = ((Attr) uqlEntity).getName();
@@ -349,7 +406,7 @@ public class UltipaTemplate implements UltipaOperations, ApplicationContextAware
                         .map(value -> {
                             Map<String, Object> map = new HashMap<>();
                             map.put(name, value);
-                            return Schema.from(map);
+                            return Schema.of(map);
                         }).collect(Collectors.toList());
                 result.addAll(mapList);
             }
@@ -363,13 +420,13 @@ public class UltipaTemplate implements UltipaOperations, ApplicationContextAware
                                     map.put(headers.get(index), row.get(index));
                                 }
                             }
-                            return Schema.from(map);
+                            return Schema.of(map);
                         })
                         .collect(Collectors.toList());
                 result.addAll(mapList);
             }
             if (uqlEntity instanceof UqlArray) {
-                ((UqlArray) uqlEntity).forEach(element -> result.add(Schema.from(element)));
+                ((UqlArray) uqlEntity).forEach(element -> result.add(Schema.of(element)));
             }
         });
         return result;

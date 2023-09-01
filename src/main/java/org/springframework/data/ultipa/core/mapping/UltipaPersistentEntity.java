@@ -2,6 +2,9 @@ package org.springframework.data.ultipa.core.mapping;
 
 import org.springframework.data.mapping.PersistentEntity;
 import org.springframework.data.mapping.model.MutablePersistentEntity;
+import org.springframework.data.ultipa.annotation.CascadeType;
+
+import java.util.List;
 
 /**
  * Ultipa specific {@link PersistentEntity} abstraction.
@@ -32,4 +35,12 @@ public interface UltipaPersistentEntity<T> extends MutablePersistentEntity<T, Ul
     default boolean isSchema() {
         return isNode() || isEdge();
     }
+
+    /**
+     * Gets the persistent properties that support the given cascade type
+     *
+     * @param cascadeType the cascade type
+     * @return Supported persistent properties
+     */
+    List<UltipaPersistentProperty> getCascadeProperty(CascadeType cascadeType);
 }

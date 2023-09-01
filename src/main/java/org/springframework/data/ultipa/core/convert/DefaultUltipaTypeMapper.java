@@ -80,7 +80,6 @@ public class DefaultUltipaTypeMapper extends DefaultTypeMapper<Schema> implement
 
     /**
      * {@link TypeAliasAccessor} to store aliases in a {@link Schema}.
-     *
      */
     public static final class SchemaTypeAliasAccessor implements TypeAliasAccessor<Schema> {
 
@@ -95,7 +94,7 @@ public class DefaultUltipaTypeMapper extends DefaultTypeMapper<Schema> implement
          * @see org.springframework.data.convert.TypeAliasAccessor#readAliasFrom(java.lang.Object)
          */
         public Alias readAliasFrom(Schema source) {
-            return Alias.ofNullable(source.get(typeKey));
+            return typeKey == null ? Alias.empty() : Alias.ofNullable(source.get(typeKey));
         }
 
         /*

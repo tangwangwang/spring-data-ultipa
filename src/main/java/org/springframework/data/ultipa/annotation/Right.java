@@ -1,5 +1,6 @@
 package org.springframework.data.ultipa.annotation;
 
+import org.springframework.core.annotation.AliasFor;
 import org.springframework.data.annotation.Reference;
 
 import java.lang.annotation.*;
@@ -17,10 +18,17 @@ import java.lang.annotation.*;
 public @interface Right {
 
     /**
+     * @return See {@link #edge()}.
+     */
+    @AliasFor("edge")
+    String value() default "";
+
+    /**
      * (Optional) Represents the edge schema name between two node schemas, or the node schema name between
      * two edge schemas.
      * The between class no longer persists any properties, Only to connect to the node or edge.
      */
+    @AliasFor("value")
     String edge() default "";
 
     /**

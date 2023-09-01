@@ -117,6 +117,10 @@ public class UltipaProxyFactory extends UltipaProxyFactorySupport {
                 }
             }
 
+            if (method.getDeclaringClass() == UltipaProxy.class) {
+                return method.invoke(proxy, args);
+            }
+
             Object target = proxy.getTarget();
 
             if (target == null) {

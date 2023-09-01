@@ -47,6 +47,13 @@ public @interface Property {
     boolean json() default false;
 
     /**
+     * Whether modification is not allowed, only read
+     *
+     * @return Whether only reads are allowed
+     */
+    boolean readonly() default false;
+
+    /**
      * @return The description of the schema property in the graph.
      */
     String description() default "";

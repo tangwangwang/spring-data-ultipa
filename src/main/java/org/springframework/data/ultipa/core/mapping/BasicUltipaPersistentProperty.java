@@ -130,6 +130,11 @@ public class BasicUltipaPersistentProperty extends AnnotationBasedPersistentProp
     }
 
     @Override
+    public boolean isReadonly() {
+        return (boolean) getAnnotatedValue(Property.class, "readonly");
+    }
+
+    @Override
     public boolean isJson() {
         return !simpleTypeHolder.isSimpleType(getType()) && (boolean) getAnnotatedValue(Property.class, "json");
     }

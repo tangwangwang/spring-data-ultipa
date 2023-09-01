@@ -4,8 +4,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.data.convert.EntityConverter;
 import org.springframework.data.convert.EntityReader;
 import org.springframework.data.convert.EntityWriter;
+import org.springframework.data.ultipa.annotation.CascadeType;
 import org.springframework.data.ultipa.core.mapping.UltipaPersistentEntity;
 import org.springframework.data.ultipa.core.mapping.UltipaPersistentProperty;
+import org.springframework.data.ultipa.core.schema.PersistSchema;
 import org.springframework.data.ultipa.core.schema.Schema;
 
 import java.util.List;
@@ -32,4 +34,20 @@ public interface UltipaConverter extends EntityConverter<UltipaPersistentEntity<
      * Read the List that contains elements.
      */
     List<Object> readArray(Schema source);
+
+    /**
+     * Write properties from the object to the schema
+     *
+     * @param source An object that provides properties
+     * @param sink   The schema of the received properties
+     */
+    void write(Object source, Schema sink);
+
+    /**
+     * Write cascading relationships from the object to the schema
+     *
+     * @param source An object that provides cascading relationships
+     * @param sink   The schema of the received cascading relationships
+     */
+    void write(Object source, PersistSchema sink, CascadeType cascade);
 }

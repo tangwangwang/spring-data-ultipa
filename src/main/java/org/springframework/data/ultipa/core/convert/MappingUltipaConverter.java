@@ -30,8 +30,7 @@ import org.springframework.data.ultipa.core.mapping.model.UltipaPropertyTypeHold
 import org.springframework.data.ultipa.core.mapping.model.UltipaSystemProperty;
 import org.springframework.data.ultipa.core.proxy.UltipaProxy;
 import org.springframework.data.ultipa.core.proxy.UltipaProxyFactory;
-import org.springframework.data.ultipa.core.schema.IdGenerator;
-import org.springframework.data.ultipa.core.schema.Schema;
+import org.springframework.data.ultipa.core.schema.*;
 import org.springframework.data.util.ClassTypeInformation;
 import org.springframework.data.util.CustomCollections;
 import org.springframework.data.util.StreamUtils;
@@ -291,83 +290,73 @@ public class MappingUltipaConverter extends AbstractUltipaConverter implements A
         }
     }
 
-    @Override
-    public void write(Object source, Schema sink) {
+    @Nullable
+    private UltipaPersistentEntity<?> getUltipaPersistentEntity(Object source) {
         Object target = source instanceof UltipaProxy ? ((UltipaProxy) source).getTarget() : source;
         if (target == null) {
-            return;
+            return null;
         }
 
         Class<?> entityType = ClassUtils.getUserClass(source.getClass());
-        UltipaPersistentEntity<?> entity = mappingContext.getPersistentEntity(entityType);
+        return mappingContext.getPersistentEntity(entityType);
+    }
 
+    @Override
+    public void write(Object source, Schema sink) {
+        UltipaPersistentEntity<?> entity = getUltipaPersistentEntity(source);
         if (entity == null) {
             return;
         }
-
         writeInternal(source, sink, entity);
-        sink.setCascadeTypes(Collections.singletonList(CascadeType.ALL));
     }
 
-    @SuppressWarnings("unchecked")
     private void writeInternal(Object source, Schema sink, UltipaPersistentEntity<?> entity) {
-        sink.setName(entity.getSchemaName());
         PersistentPropertyAccessor<?> accessor = entity.getPropertyAccessor(source);
 
-        List<UltipaPersistentProperty> referenceProperties = new ArrayList<>();
         for (UltipaPersistentProperty property : entity) {
-            if (property.isReferenceProperty()) {
-                referenceProperties.add(property);
-                continue;
-            }
-
             Object value = accessor.getProperty(property);
-
-            if (value != null && property.isEnumProperty()) {
-                Class<? extends Enum<?>> type = (Class<? extends Enum<?>>) property.getType();
-                value = getPotentiallyConvertedEnumWrite(value, type, property.getRequiredEnumeratedType());
-            }
-
-            if (value != null && property.isJson()) {
-                try {
-                    value = objectMapper.writeValueAsString(value);
-                } catch (JsonProcessingException e) {
-                    throw new IllegalArgumentException(String.format("%s serialize %s failed.", value.getClass(),
-                            property.getRequiredField().getGenericType()), e);
-                }
-            }
-
-            if (property.isIdProperty()) {
-                writeIdValue(source, property, sink, value);
-                continue;
-            }
-
-            if (!entity.isNew(source) && property.isCreatedProperty()) {
-                continue;
-            }
-
-            Object convertedValue = getPotentiallyConvertedSimpleWrite(value, property.getPropertyType());
-            sink.put(property.getPropertyName(), convertedValue);
-        }
-
-        for (UltipaPersistentProperty property : referenceProperties) {
-            Object value = accessor.getProperty(property);
-            if (value != null) {
-                if (value.getClass().isArray()) {
-                    CollectionUtils.arrayToList(value).forEach(element -> writeReference(element, property, sink));
-                } else if (value instanceof Iterable) {
-                    ((Iterable<Object>) value).forEach(element -> writeReference(element, property, sink));
-                } else if (CustomCollections.isCollection(value.getClass())) {
-                    // noinspection DataFlowIssue
-                    ((Collection<?>) value).forEach(element -> writeReference(element, property, sink));
-                } else {
-                    writeReference(value, property, sink);
-                }
-            }
+            writeProperty(source, sink, property, value);
         }
     }
 
-    private void writeIdValue(Object source, UltipaPersistentProperty property, Schema sink, @Nullable Object idValue) {
+    private void writeProperty(Object source, Schema sink, UltipaPersistentProperty property, @Nullable Object value) {
+        if (property.isReferenceProperty()) {
+            return;
+        }
+
+        if (!property.getOwner().isNew(source)) {
+            if (property.isCreatedProperty() || property.isReadonly()) {
+                return;
+            }
+        }
+
+        if (property.isIdProperty() && sink instanceof PersistSchema) {
+            writeIdValue(source, (PersistSchema) sink, property, value);
+            return;
+        }
+
+        if (value != null && property.isEnumProperty()) {
+            // noinspection unchecked
+            Class<? extends Enum<?>> type = (Class<? extends Enum<?>>) property.getType();
+            value = getPotentiallyConvertedEnumWrite(value, type, property.getRequiredEnumeratedType());
+        }
+
+        if (value != null && property.isJson()) {
+            try {
+                value = objectMapper.writeValueAsString(value);
+            } catch (JsonProcessingException e) {
+                throw new IllegalArgumentException(String.format("%s serialize %s failed.", value.getClass(),
+                        property.getRequiredField().getGenericType()), e);
+            }
+        }
+
+        Object convertedValue = getPotentiallyConvertedSimpleWrite(value, property.getPropertyType());
+
+        String uqlValue = getPotentiallyConvertedUrlWrite(convertedValue, property.getPropertyType());
+        sink.put(property.getPropertyName(), uqlValue);
+    }
+
+    private void writeIdValue(Object source, PersistSchema sink, UltipaPersistentProperty property, @Nullable Object idValue) {
         if (!property.isIdProperty()) {
             return;
         }
@@ -375,11 +364,12 @@ public class MappingUltipaConverter extends AbstractUltipaConverter implements A
 
         if (idValue != null) {
             sink.setIdValue(idValue);
-            sink.setNew(false);
+            sink.setIsNew(false);
+            writeIdValue(sink, idValue, property.getPropertyType());
         } else {
-            sink.setNew(true);
+            sink.setIsNew(true);
             idValue = computeId(property, source);
-            sink.setIdValue(idValue);
+            writeIdValue(sink, idValue, property.getPropertyType());
             Boolean isUniqueIdentifier = Optional.ofNullable(property.getSystemProperty())
                     .map(UltipaSystemProperty::isUniqueIdentifier)
                     .orElse(false);
@@ -391,62 +381,13 @@ public class MappingUltipaConverter extends AbstractUltipaConverter implements A
         }
     }
 
-
-    private void writeReference(Object value, UltipaPersistentProperty property, Schema sink) {
-        Class<?> referenceType = property.getReferenceType();
-
-        if (CollectionUtils.isEmpty(property.getCascadeTypes()) || referenceType == null) {
+    private void writeIdValue(PersistSchema sink, @Nullable Object idValue, PropertyType idType) {
+        if (idValue == null) {
             return;
         }
-
-        UltipaPersistentEntity<?> entity = mappingContext.getPersistentEntity(referenceType);
-
-        if (entity == null) {
-            return;
-        }
-
-        String edgeName = property.getBetweenEdge();
-
-        // Get the schema that already exists
-        Schema schema = sink.find(entity.getSchemaName(), value);
-        if (schema != null) {
-            writeReference(property, sink, schema);
-            return;
-        }
-
-        Schema referenceSchema = null;
-        if (property.isFromProperty() || property.isLeftProperty()) {
-            referenceSchema = StringUtils.hasText(edgeName) ? sink.left(edgeName).left() : sink.left();
-        }
-
-        if (property.isToProperty() || property.isRightProperty()) {
-            referenceSchema = StringUtils.hasText(edgeName) ? sink.right(edgeName).right() : sink.right();
-        }
-
-        if (referenceSchema != null) {
-            writeInternal(value, referenceSchema, entity);
-            referenceSchema.setCascadeTypes(property.getCascadeTypes());
-        }
-    }
-
-    private void writeReference(UltipaPersistentProperty property, Schema sink, Schema existsSchema) {
-        String edgeName = property.getBetweenEdge();
-
-        if (property.isFromProperty() || property.isLeftProperty()) {
-            if (StringUtils.hasText(edgeName)) {
-                sink.left(edgeName).left(existsSchema);
-            } else {
-                sink.left(existsSchema);
-            }
-        }
-
-        if (property.isToProperty() || property.isRightProperty()) {
-            if (StringUtils.hasText(edgeName)) {
-                sink.right(edgeName).right(existsSchema);
-            } else {
-                sink.right(existsSchema);
-            }
-        }
+        Object convertedValue = getPotentiallyConvertedSimpleWrite(idValue, idType);
+        String uqlValue = getPotentiallyConvertedUrlWrite(convertedValue, idType);
+        sink.setIdValue(uqlValue);
     }
 
     @Nullable
@@ -483,6 +424,117 @@ public class MappingUltipaConverter extends AbstractUltipaConverter implements A
         }
 
         return idGenerator.generateId(idProperty.getPropertyName(), entity);
+    }
+
+    @Override
+    public void write(Object source, PersistSchema sink, CascadeType cascade) {
+        sink.setSource(source);
+        UltipaPersistentEntity<?> entity = getUltipaPersistentEntity(source);
+        if (entity == null) {
+            return;
+        }
+
+        if (!entity.isSchema()) {
+            return;
+        }
+
+        if (entity.isEdge() && !(sink instanceof EdgeSchema)) {
+            return;
+        }
+
+        if (entity.isNode() && !(sink instanceof NodeSchema)) {
+            return;
+        }
+
+        writeReference(source, sink, entity, cascade);
+    }
+
+    private void writeReference(Object source, PersistSchema sink, UltipaPersistentEntity<?> entity, CascadeType cascade) {
+        sink.setSchema(entity.getSchemaName());
+        PersistentPropertyAccessor<?> accessor = entity.getPropertyAccessor(source);
+
+        for (UltipaPersistentProperty property : entity) {
+            Object value = accessor.getProperty(property);
+            if (property.isReferenceProperty() && value != null) {
+                writeReference(sink, property, value, cascade);
+            }
+        }
+    }
+
+    private void writeReference(PersistSchema sink, UltipaPersistentProperty property, Object value, CascadeType cascade) {
+        List<CascadeType> propertyCascadeTypes = property.getCascadeTypes();
+        // property cascade not matched
+        if (!CollectionUtils.containsAny(propertyCascadeTypes, Arrays.asList(cascade, CascadeType.ALL))) {
+            return;
+        }
+
+        UltipaPersistentEntity<?> entity = mappingContext.getPersistentEntity(property);
+        if (entity == null) {
+            return;
+        }
+
+        // Uninitialized proxies are ignored
+        if (value instanceof UltipaProxy && !((UltipaProxy) value).isInitialized()) {
+            return;
+        }
+
+        if (value.getClass().isArray()) {
+            CollectionUtils.arrayToList(value).forEach(element -> writeReference(sink, property, element, entity, cascade));
+        } else if (value instanceof Iterable) {
+            // noinspection unchecked
+            ((Iterable<Object>) value).forEach(element -> writeReference(sink, property, element, entity, cascade));
+        } else if (CustomCollections.isCollection(value.getClass())) {
+            // noinspection DataFlowIssue
+            ((Collection<?>) value).forEach(element -> writeReference(sink, property, element, entity, cascade));
+        } else {
+            writeReference(sink, property, value, entity, cascade);
+        }
+    }
+
+    private void writeReference(PersistSchema sink, UltipaPersistentProperty property, Object value, UltipaPersistentEntity<?> entity, CascadeType cascade) {
+        if (cascade == CascadeType.UPDATE && entity.isNew(value)) {
+            return;
+        }
+
+        // Get the schema that already exists
+        PersistSchema referenceSchema = sink.find(entity.getSchemaName(), value);
+        if (referenceSchema != null) {
+            writeReference(sink, property, referenceSchema);
+            return;
+        }
+
+        String edgeName = property.getBetweenEdge();
+        if (property.isFromProperty() || property.isLeftProperty()) {
+            referenceSchema = StringUtils.hasText(edgeName) ? sink.left(edgeName).left() : sink.left();
+        }
+
+        if (property.isToProperty() || property.isRightProperty()) {
+            referenceSchema = StringUtils.hasText(edgeName) ? sink.right(edgeName).right() : sink.right();
+        }
+
+        if (referenceSchema != null) {
+            write(value, referenceSchema, cascade);
+        }
+    }
+
+    private void writeReference(PersistSchema sink, UltipaPersistentProperty property, PersistSchema existsSchema) {
+        String edgeName = property.getBetweenEdge();
+
+        if (property.isFromProperty() || property.isLeftProperty()) {
+            if (StringUtils.hasText(edgeName)) {
+                sink.left(edgeName).left(existsSchema);
+            } else {
+                sink.left(existsSchema);
+            }
+        }
+
+        if (property.isToProperty() || property.isRightProperty()) {
+            if (StringUtils.hasText(edgeName)) {
+                sink.right(edgeName).right(existsSchema);
+            } else {
+                sink.right(existsSchema);
+            }
+        }
     }
 
     @Nullable
@@ -558,6 +610,73 @@ public class MappingUltipaConverter extends AbstractUltipaConverter implements A
                 return value;
             default:
                 return value;
+        }
+    }
+
+    private String getPotentiallyConvertedUrlWrite(@Nullable Object value, @Nullable PropertyType propertyType) {
+        String nullValue = UltipaSystemProperty.NULL_VALUE;
+        if (propertyType == null || value == null) {
+            return nullValue;
+        }
+        switch (propertyType) {
+            case STRING:
+            case TEXT:
+                return Optional.of(value)
+                        .map(String::valueOf)
+                        // because ultipa db interpret character \\t as \t, so need to replace \\t as \\\\t to keep character \\t
+                        .map(v -> v.replace("\\", "\\\\"))
+                        .map(v -> v.replace("\"", "\\\""))
+                        .map(it -> String.format("\"%s\"", it))
+                        .orElse(nullValue);
+            case INT32:
+            case UINT32:
+            case INT64:
+            case UINT64:
+            case FLOAT:
+            case DOUBLE:
+                return Optional.of(value)
+                        .map(it -> conversionService.convert(it, String.class))
+                        .orElse(nullValue);
+            case POINT:
+            case DATETIME:
+            case TIMESTAMP:
+                return Optional.of(value)
+                        .map(it -> conversionService.convert(it, String.class))
+                        .map(it -> String.format("\"%s\"", it))
+                        .orElse(nullValue);
+            case STRING_ARRAY:
+            case TEXT_ARRAY:
+            case INT32_ARRAY:
+            case UINT32_ARRAY:
+            case INT64_ARRAY:
+            case UINT64_ARRAY:
+            case FLOAT_ARRAY:
+            case DOUBLE_ARRAY:
+            case DATETIME_ARRAY:
+            case TIMESTAMP_ARRAY:
+                Class<?> valueClass = value.getClass();
+                Stream<?> stream = null;
+                if (valueClass.isArray()) {
+                    stream = CollectionUtils.arrayToList(value).stream();
+                }
+
+                if (Iterable.class.isAssignableFrom(valueClass)) {
+                    stream = StreamUtils.createStreamFromIterator(((Iterable<?>) value).iterator());
+                }
+
+                if (CustomCollections.isCollection(valueClass)) {
+                    stream = ((Collection<?>) value).stream();
+                }
+
+                if (stream != null) {
+                    PropertyType simpleType = UltipaPropertyTypeHolder.getSimpleType(propertyType);
+                    return stream
+                            .map(it -> getPotentiallyConvertedUrlWrite(it, simpleType))
+                            .collect(Collectors.joining(", ", "[ ", " ]"));
+                }
+                return nullValue;
+            default:
+                return nullValue;
         }
     }
 

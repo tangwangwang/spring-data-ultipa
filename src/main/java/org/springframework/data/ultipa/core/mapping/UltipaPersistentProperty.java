@@ -42,6 +42,18 @@ public interface UltipaPersistentProperty extends PersistentProperty<UltipaPersi
      */
     PropertyType getPropertyType();
 
+    /**
+     * Returns whether it is a read-only property in the schema.
+     *
+     * @return Read-only properties return true, otherwise return false
+     */
+    boolean isReadonly();
+
+    /**
+     * Returns whether it is a json string property in the schema.
+     *
+     * @return Json string properties return true, otherwise return false
+     */
     boolean isJson();
 
     boolean isEnumProperty();
@@ -85,6 +97,14 @@ public interface UltipaPersistentProperty extends PersistentProperty<UltipaPersi
 
     @Nullable
     Class<?> getReferenceType();
+
+    default Class<?> getRequiredReferenceType() {
+        Class<?> referenceType = getReferenceType();
+        if (referenceType == null) {
+            throw new IllegalStateException(String.format("Required reference property not found for %s", getPropertyName()));
+        }
+        return referenceType;
+    }
 
     @Nullable
     <E> Object getProperty(E entity);

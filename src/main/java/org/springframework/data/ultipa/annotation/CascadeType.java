@@ -19,9 +19,9 @@ public enum CascadeType {
     PERSIST,
 
     /**
-     * Cascade merge operation
+     * Cascade update operation
      */
-    MERGE,
+    UPDATE,
 
     /**
      * Cascade remove operation
