@@ -89,9 +89,7 @@ abstract class AbstractPersistSchema extends MapSchema implements PersistSchema 
 
     @Override
     public String toUqlString() {
-        if (isNew == null) {
-            return getInsertIfAbsentUql();
-        } else if (isNew) {
+        if (isNew == null || isNew) {
             return getInsertUql();
         } else {
             return getUpdateUql();
@@ -116,8 +114,6 @@ abstract class AbstractPersistSchema extends MapSchema implements PersistSchema 
                 .map(it -> String.format(SETTER_CLAUSE, it.getKey(), it.getValue()))
                 .collect(Collectors.joining(SETTER_DELIMITER));
     }
-
-    protected abstract String getInsertIfAbsentUql();
 
     protected abstract String getInsertUql();
 

@@ -33,6 +33,11 @@ class CycledNodePersistSchema extends NodePersistSchema {
     }
 
     @Override
+    public void queried() {
+        target.queried();
+    }
+
+    @Override
     public EdgeSchema left() {
         return target.left();
     }

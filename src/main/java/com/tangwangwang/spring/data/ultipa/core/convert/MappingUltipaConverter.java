@@ -462,36 +462,84 @@ public class MappingUltipaConverter extends AbstractUltipaConverter implements A
     }
 
     private void writeReference(PersistSchema sink, UltipaPersistentProperty property, Object value, CascadeType cascade) {
-        List<CascadeType> propertyCascadeTypes = property.getCascadeTypes();
-        // property cascade not matched
-        if (!CollectionUtils.containsAny(propertyCascadeTypes, Arrays.asList(cascade, CascadeType.ALL))) {
-            return;
-        }
-
         UltipaPersistentEntity<?> entity = mappingContext.getPersistentEntity(property);
         if (entity == null) {
             return;
         }
 
+        CascadeType propertyCascade = cascade;
+
+        List<CascadeType> propertyCascadeTypes = property.getCascadeTypes();
+        // property cascade not matched
+        if (!CollectionUtils.containsAny(propertyCascadeTypes, Arrays.asList(cascade, CascadeType.ALL))) {
+            propertyCascade = null;
+        }
+
         // Uninitialized proxies are ignored
         if (value instanceof UltipaProxy && !((UltipaProxy) value).isInitialized()) {
-            return;
+            propertyCascade = null;
         }
 
         if (value.getClass().isArray()) {
-            CollectionUtils.arrayToList(value).forEach(element -> writeReference(sink, property, element, entity, cascade));
+            for (Object element : CollectionUtils.arrayToList(value)) {
+                writeReference(sink, property, element, entity, propertyCascade);
+            }
         } else if (value instanceof Iterable) {
             // noinspection unchecked
-            ((Iterable<Object>) value).forEach(element -> writeReference(sink, property, element, entity, cascade));
+            for (Object element : ((Iterable<Object>) value)) {
+                writeReference(sink, property, element, entity, propertyCascade);
+            }
         } else if (CustomCollections.isCollection(value.getClass())) {
             // noinspection DataFlowIssue
-            ((Collection<?>) value).forEach(element -> writeReference(sink, property, element, entity, cascade));
+            for (Object element : ((Collection<?>) value)) {
+                writeReference(sink, property, element, entity, propertyCascade);
+            }
         } else {
-            writeReference(sink, property, value, entity, cascade);
+            writeReference(sink, property, value, entity, propertyCascade);
         }
     }
 
-    private void writeReference(PersistSchema sink, UltipaPersistentProperty property, Object value, UltipaPersistentEntity<?> entity, CascadeType cascade) {
+    private void writeReferenceReadonly(PersistSchema sink, UltipaPersistentProperty property, Object value, UltipaPersistentEntity<?> entity) {
+        NodeSchema node = null;
+        if (sink instanceof NodeSchema) {
+            String edgeName = property.getBetweenEdge();
+            if (!StringUtils.hasText(edgeName)) {
+                return;
+            }
+
+            if (property.isLeftProperty()) {
+                node = ((NodeSchema) sink).left(edgeName).left();
+            }
+
+            if (property.isRightProperty()) {
+                node = ((NodeSchema) sink).right(edgeName).right();
+            }
+        }
+
+        if (sink instanceof EdgeSchema) {
+            if (property.isFromProperty()) {
+                node = ((EdgeSchema) sink).from();
+            }
+
+            if (property.isToProperty()) {
+                node = ((EdgeSchema) sink).to();
+            }
+        }
+
+        if (node != null) {
+            node.setSource(value);
+            node.setSchema(entity.getSchemaName());
+            node.queried();
+        }
+    }
+
+    private void writeReference(PersistSchema sink, UltipaPersistentProperty property, Object value, UltipaPersistentEntity<?> entity, @Nullable CascadeType cascade) {
+        if (cascade == null) {
+            writeReferenceReadonly(sink, property, value, entity);
+            return;
+        }
+
+        // Update cascade does not persist new entity
         if (cascade == CascadeType.UPDATE && entity.isNew(value)) {
             return;
         }

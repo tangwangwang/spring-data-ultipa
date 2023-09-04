@@ -19,9 +19,11 @@ import java.util.stream.Stream;
 class NodePersistSchema extends AbstractPersistSchema implements NodeSchema {
     private static final String INSERT_UQL = "insert().into(%s).nodes({ %s }) as nodes return nodes{*}";
     private static final String UPDATE_UQL = "update().nodes({ %s }).set({ %s }) as nodes return nodes{*}";
+    private static final String QUERY_UQL = "find().nodes({ %s }) as nodes return nodes{*}";
     private final List<EdgeSchema> left = new ArrayList<>();
     private final List<EdgeSchema> right = new ArrayList<>();
     private @Nullable String systemId;
+    private boolean isQueried;
 
     NodePersistSchema() {
     }
@@ -39,6 +41,11 @@ class NodePersistSchema extends AbstractPersistSchema implements NodeSchema {
     @Override
     public String getSystemId() {
         return systemId;
+    }
+
+    @Override
+    public void queried() {
+        this.isQueried = true;
     }
 
     @Override
@@ -113,13 +120,19 @@ class NodePersistSchema extends AbstractPersistSchema implements NodeSchema {
         return Stream.of(this.left, this.right).flatMap(Collection::stream);
     }
 
-    @Override
-    protected String getInsertIfAbsentUql() {
-        throw new UnsupportedOperationException();
+    protected String getQueryUql() {
+        String filterClause = Stream.of(getSchemaFilterClause(), getIdentifierFilterClause())
+                .filter(StringUtils::hasText)
+                .collect(Collectors.joining(FILTER_DELIMITER));
+        return String.format(QUERY_UQL, filterClause);
     }
 
     @Override
     protected String getInsertUql() {
+        if (isQueried) {
+            return getQueryUql();
+        }
+
         String setterClause = Stream.of(getIdentifierSetterClause(), getPropertySetterClause())
                 .filter(StringUtils::hasText)
                 .collect(Collectors.joining(SETTER_DELIMITER));
@@ -129,6 +142,10 @@ class NodePersistSchema extends AbstractPersistSchema implements NodeSchema {
 
     @Override
     protected String getUpdateUql() {
+        if (isQueried) {
+            return getQueryUql();
+        }
+
         String filterClause = Stream.of(getSchemaFilterClause(), getIdentifierFilterClause())
                 .filter(StringUtils::hasText)
                 .collect(Collectors.joining(FILTER_DELIMITER));

@@ -84,7 +84,6 @@ class EdgePersistSchema extends AbstractPersistSchema implements EdgeSchema {
         return Stream.of(this.from, this.to);
     }
 
-    @Override
     protected String getInsertIfAbsentUql() {
         Long fromUuid = from().getSystemUuid();
         Long toUuid = to().getSystemUuid();
@@ -93,6 +92,10 @@ class EdgePersistSchema extends AbstractPersistSchema implements EdgeSchema {
 
     @Override
     protected String getInsertUql() {
+        if (getIsNew() == null) {
+            return getInsertIfAbsentUql();
+        }
+
         String setterClause = Stream.of(getIdentifierSetterClause(), getSystemPropertySetterClause(), getPropertySetterClause())
                 .filter(StringUtils::hasText)
                 .collect(Collectors.joining(SETTER_DELIMITER));
@@ -117,8 +120,8 @@ class EdgePersistSchema extends AbstractPersistSchema implements EdgeSchema {
         Map<String, Object> systemProperties = new HashMap<>();
         systemProperties.put(UltipaSystemProperty.FROM_UUID.getMappedName(), from.getSystemUuid());
         systemProperties.put(UltipaSystemProperty.TO_UUID.getMappedName(), to.getSystemUuid());
-        systemProperties.put(UltipaSystemProperty.FROM.getMappedName(), from.getSystemId());
-        systemProperties.put(UltipaSystemProperty.TO.getMappedName(), to.getSystemId());
+        systemProperties.put(UltipaSystemProperty.FROM.getMappedName(), String.format("\"%s\"", from.getSystemId()));
+        systemProperties.put(UltipaSystemProperty.TO.getMappedName(), String.format("\"%s\"", to.getSystemId()));
 
         return systemProperties.entrySet().stream()
                 .filter(it -> it.getValue() != null)

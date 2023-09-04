@@ -36,8 +36,17 @@ public interface NodeSchema extends PersistSchema {
     @Nullable
     String getSystemId();
 
+    void queried();
+
     @Override
     EdgeSchema left();
+
+    @Override
+    default EdgeSchema left(String schema) {
+        EdgeSchema left = left();
+        left.setSchema(schema);
+        return left;
+    }
 
     @Override
     default void left(PersistSchema schema) {
@@ -50,6 +59,13 @@ public interface NodeSchema extends PersistSchema {
 
     @Override
     EdgeSchema right();
+
+    @Override
+    default EdgeSchema right(String schema) {
+        EdgeSchema right = right();
+        right.setSchema(schema);
+        return right;
+    }
 
     @Override
     default void right(PersistSchema schema) {
