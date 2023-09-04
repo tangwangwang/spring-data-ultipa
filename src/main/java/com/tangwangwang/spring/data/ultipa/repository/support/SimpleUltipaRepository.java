@@ -72,12 +72,12 @@ public class SimpleUltipaRepository<T, ID> implements UltipaRepository<T, ID> {
     }
 
     @Override
-    public Iterable<T> findAll() {
+    public List<T> findAll() {
         return operations.getAll(information.getJavaType());
     }
 
     @Override
-    public Iterable<T> findAllById(Iterable<ID> ids) {
+    public List<T> findAllById(Iterable<ID> ids) {
         String schemaFilter = "@" + information.getSchemaName();
         String idFilter = generateIdFilter(schemaFilter, true);
 
@@ -162,7 +162,7 @@ public class SimpleUltipaRepository<T, ID> implements UltipaRepository<T, ID> {
     }
 
     @Override
-    public Iterable<T> findAll(Sort sort) {
+    public List<T> findAll(Sort sort) {
         String schemaFilter = "@" + information.getSchemaName();
         if (information.isNode()) {
             return operations.createQuery(String.format(FIND_NODES_UQL, schemaFilter), sort, "nodes")
