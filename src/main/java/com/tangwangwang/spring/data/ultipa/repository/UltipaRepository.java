@@ -1,5 +1,6 @@
 package com.tangwangwang.spring.data.ultipa.repository;
 
+import org.springframework.data.repository.CrudRepository;
 import org.springframework.data.repository.NoRepositoryBean;
 import org.springframework.data.repository.PagingAndSortingRepository;
 import org.springframework.data.repository.Repository;
@@ -13,5 +14,5 @@ import org.springframework.data.repository.Repository;
  * @since 1.0
  */
 @NoRepositoryBean
-public interface UltipaRepository<T, ID> extends PagingAndSortingRepository<T, ID> {
+public interface UltipaRepository<T, ID> extends CrudRepository<T, ID>, PagingAndSortingRepository<T, ID> {
 }
