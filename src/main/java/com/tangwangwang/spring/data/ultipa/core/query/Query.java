@@ -1,0 +1,472 @@
+package com.tangwangwang.spring.data.ultipa.core.query;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.tangwangwang.spring.data.ultipa.core.UltipaOperations;
+import com.tangwangwang.spring.data.ultipa.core.convert.UltipaConverter;
+import com.tangwangwang.spring.data.ultipa.core.exception.ParameterBindingException;
+import com.tangwangwang.spring.data.ultipa.core.mapping.model.UltipaEnumTypeHolder;
+import com.tangwangwang.spring.data.ultipa.core.mapping.model.UltipaSystemProperty;
+import org.springframework.beans.BeanWrapperImpl;
+import org.springframework.beans.PropertyAccessor;
+import org.springframework.context.expression.MapAccessor;
+import org.springframework.core.convert.ConversionService;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.geo.Point;
+import org.springframework.expression.Expression;
+import org.springframework.expression.ExpressionException;
+import org.springframework.expression.ExpressionParser;
+import org.springframework.expression.spel.SpelParserConfiguration;
+import org.springframework.expression.spel.standard.SpelExpressionParser;
+import org.springframework.expression.spel.support.StandardEvaluationContext;
+import org.springframework.lang.Nullable;
+import org.springframework.util.Assert;
+import org.springframework.util.PropertyPlaceholderHelper;
+import org.springframework.util.StringUtils;
+
+import java.sql.Timestamp;
+import java.time.*;
+import java.util.*;
+import java.util.function.Function;
+import java.util.stream.Stream;
+
+/**
+ * @author Wangwang Tang
+ * @since 1.0
+ */
+public class Query {
+
+    private final static List<Class<?>> antiInjectionTypes = Arrays.asList(
+            String.class, UUID.class, Character.class, char.class,
+            Enum.class, Date.class, Timestamp.class, Instant.class,
+            LocalDate.class, LocalTime.class, LocalDateTime.class
+    );
+    private final static List<Class<?>> pointTypes = Arrays.asList(Point.class, com.ultipa.sdk.data.Point.class);
+    private final static List<Class<?>> datetimeTypes = Arrays.asList(LocalDate.class, LocalTime.class, LocalDateTime.class);
+    private final static List<Class<?>> timestampTypes = Arrays.asList(Instant.class, ZonedDateTime.class, Date.class, Timestamp.class);
+    private final UltipaOperations operations;
+    private final UltipaConverter converter;
+    private final ExpressionParser parser;
+    private final String queryString;
+    private final Map<String, Object> paramMap;
+    private long skip;
+    private int limit;
+    private Sort sort = Sort.unsorted();
+    private final @Nullable String sortPrefix;
+
+    protected Query(UltipaOperations operations, String queryString, @Nullable ExpressionParser parser,
+                    @Nullable Map<String, Object> paramMap, @Nullable String sortPrefix) {
+        this.operations = operations;
+        this.converter = operations.getConverter();
+        this.queryString = queryString;
+        this.parser = Optional.ofNullable(parser).orElse(new SpelExpressionParser(new SpelParserConfiguration(true, true)));
+        this.paramMap = Optional.ofNullable(paramMap).orElse(new HashMap<>());
+        this.sortPrefix = sortPrefix;
+    }
+
+    protected Query(UltipaOperations operations, String queryString, @Nullable ExpressionParser parser,
+                    @Nullable Map<String, Object> paramMap, Pageable pageable, @Nullable String sortPrefix) {
+        this(operations, queryString, parser, paramMap, sortPrefix);
+        with(pageable);
+    }
+
+    protected Query(UltipaOperations operations, String queryString, @Nullable ExpressionParser parser,
+                    @Nullable Map<String, Object> paramMap, Sort sort, @Nullable String sortPrefix) {
+        this(operations, queryString, parser, paramMap, sortPrefix);
+        with(sort);
+    }
+
+    public Query skip(long skip) {
+        this.skip = skip;
+        return this;
+    }
+
+    public Query limit(int limit) {
+        this.limit = limit;
+        return this;
+    }
+
+    public Query with(Pageable pageable) {
+        Assert.notNull(pageable, "Pageable must not be null!");
+
+        if (pageable.isUnpaged()) {
+            return this;
+        }
+
+        this.limit = pageable.getPageSize();
+        this.skip = pageable.getOffset();
+
+        return with(pageable.getSort());
+    }
+
+    public Query with(Sort sort) {
+        Assert.notNull(sort, "Sort must not be null!");
+
+        if (sort.isUnsorted()) {
+            return this;
+        }
+
+        this.sort = this.sort.and(sort);
+
+        return this;
+    }
+
+    private String formatUql() {
+        String simpleReplaceString = simpleReplacePlaceholders(queryString);
+        String antiInjectionReplaceString = antiInjectionReplacePlaceholders(simpleReplaceString);
+        return antiInjectionReplaceString + appendSort() + appendSkipAndLimit();
+    }
+
+    private String appendSkipAndLimit() {
+        StringBuilder sb = new StringBuilder();
+        if (this.skip > 0L) {
+            sb.append(" SKIP ").append(this.skip).append(" ");
+        }
+
+        if (this.limit > 0) {
+            sb.append(" LIMIT ").append(this.limit).append(" ");
+        }
+        return sb.toString();
+    }
+
+    private String appendSort() {
+        StringBuilder sb = new StringBuilder();
+        if (sort.isSorted()) {
+            sb.append(" ORDER BY ");
+            this.sort.stream().forEach((order) -> {
+                if (StringUtils.hasText(sortPrefix)) {
+                    sb.append(sortPrefix).append(".");
+                }
+                sb.append(order.getProperty()).append(" ").append(order.isAscending() ? "ASC," : "DESC,");
+            });
+            sb.deleteCharAt(sb.length() - 1);
+        }
+        return sb.toString();
+    }
+
+    public void execute() {
+        operations.execute(formatUql());
+    }
+
+    @Nullable
+    public <T> T findOne(Class<T> domainClass) {
+        return operations.findOne(formatUql(), domainClass);
+    }
+
+    public <T> List<T> findAll(Class<T> domainClass) {
+        return operations.findAll(formatUql(), domainClass);
+    }
+
+    @Nullable
+    public Map<String, Object> findOne() {
+        return operations.findOne(formatUql());
+    }
+
+    public List<Map<String, Object>> findAll() {
+        return operations.findAll(formatUql());
+    }
+
+    @Nullable
+    public List<Object> findArray() {
+        return operations.findArray(formatUql());
+    }
+
+    public List<List<Object>> findArrays() {
+        return operations.findArrays(formatUql());
+    }
+
+    public long count() {
+        Object count = Optional.ofNullable(findOne())
+                .map(Map::entrySet)
+                .map(Collection::stream)
+                .map(Stream::findFirst)
+                .flatMap(Function.identity())
+                .map(Map.Entry::getValue)
+                .orElse(0);
+        // noinspection DataFlowIssue
+        return converter.getConversionService().convert(count, Long.class);
+    }
+
+    public boolean exists() {
+        return !operations.findAll(formatUql()).isEmpty();
+    }
+
+    /**
+     * Simple placeholder substitution based on {@code ${}}
+     *
+     * @param source The string to replace
+     * @return The replaced string
+     */
+    private String simpleReplacePlaceholders(String source) {
+        return new PropertyPlaceholderHelper("${", "}").replacePlaceholders(source, placeholder -> {
+            Object value = resolverPlaceholder(placeholder);
+            if (isArrayOrCollection(value)) {
+                Class<?> valueClass = value.getClass();
+                Iterable<?> iterable;
+                if (valueClass.isArray()) {
+                    iterable = Arrays.asList((Object[]) value);
+                } else {
+                    iterable = (Iterable<?>) value;
+                }
+                StringBuilder target = new StringBuilder("[");
+                boolean crop = false;
+                for (Object element : iterable) {
+                    target.append(convertUqlValue(element));
+                    target.append(",");
+                    crop = true;
+                }
+                if (crop) {
+                    target.deleteCharAt(target.length() - 1);
+                }
+                target.append("]");
+                return target.toString();
+            } else {
+                return convertUqlValue(value);
+            }
+        });
+    }
+
+    /**
+     * Substitution of anti-injection placeholders according to {@code #{}},
+     *
+     * @param source The string to replace
+     * @return The replaced string
+     */
+    private String antiInjectionReplacePlaceholders(String source) {
+        return new PropertyPlaceholderHelper("#{", "}").replacePlaceholders(source, placeholder -> {
+            Object value = resolverPlaceholder(placeholder);
+            if (isArrayOrCollection(value)) {
+                Class<?> valueClass = value.getClass();
+                Iterable<?> iterable;
+                if (valueClass.isArray()) {
+                    iterable = Arrays.asList((Object[]) value);
+                } else {
+                    iterable = (Iterable<?>) value;
+                }
+                StringBuilder target = new StringBuilder("[");
+                boolean crop = false;
+                for (Object element : iterable) {
+                    String elementUqlValue = convertUqlValue(element);
+                    if (isNeedAntiInjection(element)) {
+                        target.append(String.format("\"%s\"", elementUqlValue));
+                    } else {
+                        target.append(elementUqlValue);
+                    }
+                    target.append(",");
+                    crop = true;
+                }
+                if (crop) {
+                    target.deleteCharAt(target.length() - 1);
+                }
+                target.append("]");
+                return target.toString();
+            } else {
+                String uqlValue = convertUqlValue(value);
+                return isNeedAntiInjection(value) ? String.format("\"%s\"", uqlValue) : uqlValue;
+            }
+        });
+    }
+
+    /**
+     * Determine if double quotes are required
+     *
+     * @param value Judgment object
+     * @return Judgment result
+     */
+    private boolean isNeedAntiInjection(@Nullable Object value) {
+        if (value != null) {
+            Class<?> valueClass = value.getClass();
+            for (Class<?> type : antiInjectionTypes) {
+                if (type == valueClass || type.isAssignableFrom(valueClass)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Determine if it is an array of collections
+     *
+     * @param value Judgment object
+     * @return Judgment result
+     */
+    private boolean isArrayOrCollection(@Nullable Object value) {
+        if (value != null) {
+            Class<?> valueClass = value.getClass();
+            return valueClass.isArray() || Iterable.class.isAssignableFrom(valueClass);
+        }
+        return false;
+    }
+
+    @Nullable
+    private Object resolverPlaceholder(String placeholder) {
+        if (!StringUtils.hasText(placeholder)) {
+            throw new ParameterBindingException("No content in placeholder.");
+        }
+        String[] placeholders = placeholder.split(":");
+        if (placeholders.length == 0) {
+            throw new ParameterBindingException("No content in placeholder.");
+        }
+
+        Object value = readValue(placeholders[0].trim());
+
+        return placeholders.length > 1 ? formatValue(value, placeholders[1]) : value;
+    }
+
+    @Nullable
+    private Object readValue(String placeholder) {
+        try {
+            StandardEvaluationContext context = new StandardEvaluationContext(paramMap);
+            context.addPropertyAccessor(new MapAccessor());
+            Expression expression = parser.parseExpression(placeholder);
+            return expression.getValue(context);
+        } catch (ExpressionException e) {
+            throw new ParameterBindingException("Parameter '" + placeholder + "' not found. Available parameters are " + paramMap.keySet());
+        }
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    @Nullable
+    private Object formatValue(@Nullable Object value, String placeholder) {
+        if (value == null) {
+            return null;
+        }
+        switch (placeholder.toLowerCase(Locale.ROOT)) {
+            case "field":
+                if (value instanceof Enum) {
+                    Class<? extends Enum> type = (Class<? extends Enum>) value.getClass();
+                    if (UltipaEnumTypeHolder.hasEnumField(type)) {
+                        PropertyAccessor enumAccessor = new BeanWrapperImpl(value);
+                        value = enumAccessor.getPropertyValue(UltipaEnumTypeHolder.getRequiredEnumField(type).getName());
+                    } else {
+                        value = ((Enum<?>) value).name();
+                    }
+                }
+                break;
+            case "name":
+                if (value instanceof Enum) {
+                    return ((Enum<?>) value).name();
+                }
+                break;
+            case "ordinal":
+                if (value instanceof Enum) {
+                    return ((Enum<?>) value).ordinal();
+                }
+                break;
+            case "json":
+                try {
+                    return converter.getObjectMapper().writeValueAsString(value);
+                } catch (JsonProcessingException e) {
+                    throw new IllegalArgumentException(String.format("%s serialize failed.", value.getClass()), e);
+                }
+            case "string":
+                if (value instanceof Boolean) {
+                    return value.toString();
+                }
+                break;
+            case "int":
+            case "int32":
+            case "int64":
+            case "uint":
+            case "uint32":
+            case "uint64":
+            case "float":
+            case "double":
+                if (value instanceof Boolean) {
+                    return (Boolean) value ? 1 : 0;
+                }
+                break;
+        }
+        return value;
+    }
+
+
+    private String convertUqlValue(@Nullable Object value) {
+        // handle enumeration
+        if (isEnumType(value)) {
+            value = getEnumTypeConvertedUqlWrite(value);
+        }
+
+        // handle Point
+        if (isConvertedType(value, pointTypes)) {
+            value = getPointTypeConvertedUqlWrite(value);
+        }
+
+        // handle datetime
+        if (isConvertedType(value, datetimeTypes)) {
+            value = getDatetimeTypeConvertedUqlWrite(value);
+        }
+
+        // handle timestamp
+        if (isConvertedType(value, timestampTypes)) {
+            value = getTimestampTypeConvertedUqlWrite(value);
+        }
+
+        return Optional.ofNullable(value)
+                .map(String::valueOf)
+                // because ultipa db interpret character \\t as \t, so need to replace \\t as \\\\t to keep character \\t
+                .map(v -> v.replace("\\", "\\\\"))
+                .map(v -> v.replace("\"", "\\\""))
+                .orElse(UltipaSystemProperty.NULL_VALUE);
+    }
+
+    private boolean isEnumType(@Nullable Object value) {
+        if (value == null) {
+            return false;
+        }
+        return Enum.class.isAssignableFrom(value.getClass());
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    @Nullable
+    private Object getEnumTypeConvertedUqlWrite(Object value) {
+        Class<? extends Enum> enumType = (Class<? extends Enum>) value.getClass();
+        if (UltipaEnumTypeHolder.hasEnumField(enumType)) {
+            PropertyAccessor enumAccessor = new BeanWrapperImpl(value);
+            return enumAccessor.getPropertyValue(UltipaEnumTypeHolder.getRequiredEnumField(enumType).getName());
+        } else {
+            return ((Enum<?>) value).name();
+        }
+    }
+
+    private boolean isConvertedType(@Nullable Object value, List<Class<?>> convertedTypes) {
+        if (value == null) {
+            return false;
+        }
+        for (Class<?> datetimeType : convertedTypes) {
+            if (value.getClass() == datetimeType || datetimeType.isAssignableFrom(value.getClass())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Nullable
+    private String getPointTypeConvertedUqlWrite(Object value) {
+        ConversionService conversionService = converter.getConversionService();
+        return Optional.of(value)
+                .map(it -> conversionService.convert(it, Point.class))
+                .map(it -> conversionService.convert(it, String.class))
+                .orElse(null);
+    }
+
+    @Nullable
+    private String getDatetimeTypeConvertedUqlWrite(Object value) {
+        ConversionService conversionService = converter.getConversionService();
+        return Optional.of(value)
+                .map(it -> conversionService.convert(it, LocalDateTime.class))
+                .map(it -> conversionService.convert(it, String.class))
+                .orElse(null);
+    }
+
+    @Nullable
+    private String getTimestampTypeConvertedUqlWrite(Object value) {
+        ConversionService conversionService = converter.getConversionService();
+        return Optional.of(value)
+                .map(it -> conversionService.convert(it, Date.class))
+                .map(it -> conversionService.convert(it, String.class))
+                .orElse(null);
+    }
+
+}
