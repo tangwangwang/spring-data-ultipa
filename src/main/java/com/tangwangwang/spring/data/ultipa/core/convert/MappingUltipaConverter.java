@@ -500,7 +500,17 @@ public class MappingUltipaConverter extends AbstractUltipaConverter implements A
     }
 
     private void writeReferenceReadonly(PersistSchema sink, UltipaPersistentProperty property, Object value, UltipaPersistentEntity<?> entity) {
-        NodeSchema node = null;
+        PersistSchema existsSchema = sink.find(entity.getSchemaName(), value);
+        if (!(existsSchema instanceof NodeSchema) && existsSchema != null) {
+            return;
+        }
+        NodeSchema node = Optional.ofNullable((NodeSchema) existsSchema).orElseGet(() -> {
+            NodeSchema newNode = NodeSchema.of(value);
+            newNode.setSchema(entity.getSchemaName());
+            newNode.queried();
+            return newNode;
+        });
+
         if (sink instanceof NodeSchema) {
             String edgeName = property.getBetweenEdge();
             if (!StringUtils.hasText(edgeName)) {
@@ -508,28 +518,22 @@ public class MappingUltipaConverter extends AbstractUltipaConverter implements A
             }
 
             if (property.isLeftProperty()) {
-                node = ((NodeSchema) sink).left(edgeName).left();
+                ((NodeSchema) sink).left(edgeName).left(node);
             }
 
             if (property.isRightProperty()) {
-                node = ((NodeSchema) sink).right(edgeName).right();
+                ((NodeSchema) sink).right(edgeName).right(node);
             }
         }
 
         if (sink instanceof EdgeSchema) {
             if (property.isFromProperty()) {
-                node = ((EdgeSchema) sink).from();
+                ((EdgeSchema) sink).from(node);
             }
 
             if (property.isToProperty()) {
-                node = ((EdgeSchema) sink).to();
+                ((EdgeSchema) sink).to(node);
             }
-        }
-
-        if (node != null) {
-            node.setSource(value);
-            node.setSchema(entity.getSchemaName());
-            node.queried();
         }
     }
 
