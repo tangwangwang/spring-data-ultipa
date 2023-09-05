@@ -45,7 +45,7 @@
     <properties>
         <java-module-name>spring.data.ultipa</java-module-name>
         <springdata.commons.version>2.7.15-SNAPSHOT</springdata.commons.version>
-        <ultipa-java-sdk.version>4.3.4-SNAPSHOT</ultipa-java-sdk.version>
+        <ultipa-java-sdk.version>4.3.3</ultipa-java-sdk.version>
         <maven-javadoc-plugin.version>3.5.0</maven-javadoc-plugin.version>
         <maven-gpg-plugin.version>3.1.0</maven-gpg-plugin.version>
         <nexus-staging-maven-plugin.version>1.6.13</nexus-staging-maven-plugin.version>
