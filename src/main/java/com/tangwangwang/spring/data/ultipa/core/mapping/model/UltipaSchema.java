@@ -1,10 +1,8 @@
 package com.tangwangwang.spring.data.ultipa.core.mapping.model;
 
 import com.tangwangwang.spring.data.ultipa.annotation.PropertyType;
-import org.springframework.lang.Nullable;
 
 import java.util.HashMap;
-import java.util.Map;
 
 /**
  * Ultipa persists schema entities
@@ -12,7 +10,7 @@ import java.util.Map;
  * @author Wangwang Tang
  * @since 1.0
  */
-public class UltipaSchema {
+public class UltipaSchema extends HashMap<String, UltipaProperty> {
 
     private static final String DEFAULT_DESCRIPTION = "";
 
@@ -26,11 +24,6 @@ public class UltipaSchema {
      */
 
     private final String description;
-
-    /**
-     * All properties of the schema
-     */
-    private final Map<String, UltipaProperty> properties = new HashMap<>();
 
     UltipaSchema(String name, String description) {
         this.name = name;
@@ -53,14 +46,13 @@ public class UltipaSchema {
         return description;
     }
 
-    public UltipaProperty addProperty(String name, PropertyType type, String description) {
-        UltipaProperty property = new UltipaProperty(this, name, type, description);
-        properties.put(name, property);
-        return property;
+    public UltipaProperty addProperty(String name, PropertyType type) {
+        return addProperty(name, type, DEFAULT_DESCRIPTION);
     }
 
-    @Nullable
-    public UltipaProperty getProperty(String name) {
-        return properties.get(name);
+    public UltipaProperty addProperty(String name, PropertyType type, String description) {
+        UltipaProperty property = new UltipaProperty(this, name, type, description);
+        this.put(name, property);
+        return property;
     }
 }

@@ -18,6 +18,7 @@ import org.springframework.data.util.TypeInformation;
 import org.springframework.lang.Nullable;
 import org.springframework.util.StringUtils;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -42,12 +43,11 @@ public class UltipaMappingContext extends AbstractMappingContext<UltipaPersisten
 
     private static final FieldNamingStrategy DEFAULT_NAMING_STRATEGY = PropertyNameFieldNamingStrategy.INSTANCE;
     private FieldNamingStrategy fieldNamingStrategy = DEFAULT_NAMING_STRATEGY;
-    private @Nullable ApplicationContext applicationContext;
     private boolean validate;
     private boolean generate;
 
-    private @Nullable Map<String, UltipaSchema> nodeSchemas;
-    private @Nullable Map<String, UltipaSchema> edgeSchemas;
+    private final Map<String, UltipaSchema> nodeSchemas = new HashMap<>();
+    private final Map<String, UltipaSchema> edgeSchemas = new HashMap<>();
 
     /**
      * Creates a new {@link UltipaMappingContext}.
@@ -85,6 +85,7 @@ public class UltipaMappingContext extends AbstractMappingContext<UltipaPersisten
         this.generate = generate != null && generate;
     }
 
+
     /*
      * (non-Javadoc)
      * @see org.springframework.data.mapping.context.AbstractMappingContext#shouldCreatePersistentEntityFor(org.springframework.data.util.TypeInformation)
@@ -103,96 +104,43 @@ public class UltipaMappingContext extends AbstractMappingContext<UltipaPersisten
                                                              SimpleTypeHolder simpleTypeHolder) {
         UltipaPersistentProperty persistentProperty = new BasicUltipaPersistentProperty(property, owner, simpleTypeHolder, fieldNamingStrategy);
 
-        if (owner.isSchema() && (validate || generate)) {
-            if (persistentProperty.isReferenceProperty()) {
-                if (persistentProperty.getEdgeClass() != null) {
-                    addPersistentEntity(persistentProperty.getEdgeClass());
-                }
+        if (!owner.isSchema()) {
+            return persistentProperty;
+        }
 
-                String edgeName = persistentProperty.getEdgeName();
-                if (StringUtils.hasText(edgeName)) {
-                    if (edgeSchemas != null && !edgeSchemas.containsKey(edgeName)) {
-                        UltipaSchema schema = UltipaSchema.of(edgeName);
-                        generateSchema(CREATE_EDGE_SCHEMA_UQL, schema);
-                        edgeSchemas.put(schema.getName(), schema);
-                    }
-                }
+        if (!generate && !validate) {
+            return persistentProperty;
+        }
 
-                return persistentProperty;
+        if (persistentProperty.isSystemProperty()) {
+            return persistentProperty;
+        }
+
+        if (persistentProperty.isReferenceProperty()) {
+
+            if (persistentProperty.getEdgeClass() != null) {
+                addPersistentEntity(persistentProperty.getEdgeClass());
             }
 
-            if (persistentProperty.isSystemProperty()) {
-                return persistentProperty;
+            String edgeName = persistentProperty.getEdgeName();
+            if (StringUtils.hasText(edgeName)) {
+                edgeSchemas.computeIfAbsent(edgeName, UltipaSchema::of);
             }
 
-            if (owner.isNode()) {
-                validateNodeProperty(owner, persistentProperty);
-            }
+            return persistentProperty;
+        }
 
-            if (owner.isEdge()) {
-                validateEdgeProperty(owner, persistentProperty);
-            }
+        if (owner.isNode()) {
+            UltipaSchema schema = nodeSchemas.computeIfAbsent(owner.getSchemaName(), UltipaSchema::of);
+            schema.addProperty(persistentProperty.getPropertyName(), persistentProperty.getPropertyType(), persistentProperty.getDescription());
+        }
+
+        if (owner.isEdge()) {
+            UltipaSchema schema = edgeSchemas.computeIfAbsent(owner.getSchemaName(), UltipaSchema::of);
+            schema.addProperty(persistentProperty.getPropertyName(), persistentProperty.getPropertyType(), persistentProperty.getDescription());
         }
 
         return persistentProperty;
-    }
-
-    private void validateNodeProperty(UltipaPersistentEntity<?> persistentEntity, UltipaPersistentProperty persistentProperty) {
-        if (nodeSchemas == null || !nodeSchemas.containsKey(persistentEntity.getSchemaName())) {
-            return;
-        }
-        UltipaSchema schema = nodeSchemas.get(persistentEntity.getSchemaName());
-        UltipaProperty property = schema.getProperty(persistentProperty.getPropertyName());
-
-        if (property == null) {
-            if (generate) {
-                property = schema.addProperty(persistentProperty.getPropertyName(), persistentProperty.getPropertyType(), persistentProperty.getDescription());
-                generateProperty(CREATE_NODE_PROPERTY_UQL, property);
-                return;
-            } else {
-                throw new IllegalArgumentException(String.format("The node property for '%s.%s' does not found.", persistentEntity.getSchemaName(), persistentProperty.getPropertyName()));
-            }
-        }
-
-        // validate
-        if (validate && persistentProperty.getPropertyType() != property.getType()) {
-            throw new IllegalArgumentException(String.format("The node property type for '%s.%s' do not match: expected %s, actual %s.",
-                    persistentEntity.getSchemaName(), persistentProperty.getPropertyName(), persistentProperty.getPropertyType().getMappedName(), property.getType().getMappedName()));
-        }
-
-    }
-
-    private void validateEdgeProperty(UltipaPersistentEntity<?> persistentEntity, UltipaPersistentProperty persistentProperty) {
-        if (edgeSchemas == null || !edgeSchemas.containsKey(persistentEntity.getSchemaName())) {
-            return;
-        }
-        UltipaSchema schema = edgeSchemas.get(persistentEntity.getSchemaName());
-        UltipaProperty property = schema.getProperty(persistentProperty.getPropertyName());
-
-        if (property == null) {
-            if (generate) {
-                property = schema.addProperty(persistentProperty.getPropertyName(), persistentProperty.getPropertyType(), persistentProperty.getDescription());
-                generateProperty(CREATE_EDGE_PROPERTY_UQL, property);
-                return;
-            } else {
-                throw new IllegalArgumentException(String.format("The edge property for '%s.%s' does not found.", persistentEntity.getSchemaName(), persistentProperty.getPropertyName()));
-            }
-        }
-
-        // validate
-        if (validate && persistentProperty.getPropertyType() != property.getType()) {
-            throw new IllegalArgumentException(String.format("The edge property type for '%s.%s' do not match: expected %s, actual %s.",
-                    persistentEntity.getSchemaName(), persistentProperty.getPropertyName(), persistentProperty.getPropertyType().getMappedName(), property.getType().getMappedName()));
-        }
-
-    }
-
-    private void generateProperty(String uql, UltipaProperty property) {
-        if (applicationContext != null) {
-            UltipaOperations operations = applicationContext.getBean(UltipaOperations.class);
-            Query query = operations.createQuery(String.format(uql, property.getSchema().getName(), property.getName(), property.getType().getMappedName(), property.getDescription()));
-            query.execute();
-        }
     }
 
     /*
@@ -202,40 +150,25 @@ public class UltipaMappingContext extends AbstractMappingContext<UltipaPersisten
     @Override
     protected <T> UltipaPersistentEntity<T> createPersistentEntity(TypeInformation<T> typeInformation) {
         BasicUltipaPersistentEntity<T> persistentEntity = new BasicUltipaPersistentEntity<>(typeInformation);
-        if (generate && persistentEntity.isSchema()) {
-            generateSchema(persistentEntity);
-        } else if (validate) {
-            if (persistentEntity.isNode() && nodeSchemas != null && !nodeSchemas.containsKey(persistentEntity.getSchemaName())) {
-                throw new IllegalArgumentException(String.format("The node schema for '%s' does not found.", persistentEntity.getSchemaName()));
-            }
 
-            if (persistentEntity.isEdge() && edgeSchemas != null && !edgeSchemas.containsKey(persistentEntity.getSchemaName())) {
-                throw new IllegalArgumentException(String.format("The edge schema for '%s' does not found.", persistentEntity.getSchemaName()));
-            }
+        if (!persistentEntity.isSchema()) {
+            return persistentEntity;
         }
+
+        if (!generate && !validate) {
+            return persistentEntity;
+        }
+
+        String schemaName = persistentEntity.getSchemaName();
+        if (persistentEntity.isNode() && !nodeSchemas.containsKey(schemaName)) {
+            nodeSchemas.put(schemaName, UltipaSchema.of(schemaName, persistentEntity.getDescription()));
+        }
+
+        if (persistentEntity.isEdge() && !edgeSchemas.containsKey(schemaName)) {
+            edgeSchemas.put(schemaName, UltipaSchema.of(schemaName, persistentEntity.getDescription()));
+        }
+
         return persistentEntity;
-    }
-
-    private void generateSchema(UltipaPersistentEntity<?> entity) {
-        if (entity.isNode() && nodeSchemas != null && !nodeSchemas.containsKey(entity.getSchemaName())) {
-            UltipaSchema schema = UltipaSchema.of(entity.getSchemaName(), entity.getDescription());
-            generateSchema(CREATE_NODE_SCHEMA_UQL, schema);
-            nodeSchemas.put(schema.getName(), schema);
-        }
-
-        if (entity.isEdge() && edgeSchemas != null && !edgeSchemas.containsKey(entity.getSchemaName())) {
-            UltipaSchema schema = UltipaSchema.of(entity.getSchemaName(), entity.getDescription());
-            generateSchema(CREATE_EDGE_SCHEMA_UQL, schema);
-            edgeSchemas.put(schema.getName(), schema);
-        }
-    }
-
-    private void generateSchema(String uql, UltipaSchema schema) {
-        if (applicationContext != null) {
-            UltipaOperations operations = applicationContext.getBean(UltipaOperations.class);
-            Query query = operations.createQuery(String.format(uql, schema.getName(), schema.getDescription()));
-            query.execute();
-        }
     }
 
     /*
@@ -244,25 +177,85 @@ public class UltipaMappingContext extends AbstractMappingContext<UltipaPersisten
      */
     @Override
     public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
-        this.applicationContext = applicationContext;
         super.setApplicationContext(applicationContext);
     }
 
-    private void refreshStructure() {
-        if (applicationContext != null) {
-            UltipaOperations operations = applicationContext.getBean(UltipaOperations.class);
-            initializeStructure(operations);
+    public void initializeStructure(UltipaOperations operations) {
+        if (!validate && !generate) {
+            return;
         }
+
+        // initialize
+        generateAndValidateNodeSchema(operations);
+        generateAndValidateEdgeSchema(operations);
     }
 
-    public void initializeStructure(UltipaOperations operations) {
-        // initialize
-        if (validate || generate) {
-            nodeSchemas = initializeQuerySchema(operations, SHOW_NODE_SCHEMA_UQL);
-            initializeQueryProperty(operations, nodeSchemas, SHOW_NODE_PROPERTY_UQL);
-            edgeSchemas = initializeQuerySchema(operations, SHOW_EDGE_SCHEMA_UQL);
-            initializeQueryProperty(operations, edgeSchemas, SHOW_EDGE_PROPERTY_UQL);
-        }
+    private void generateAndValidateNodeSchema(UltipaOperations operations) {
+        Map<String, UltipaSchema> persistentSchemas = initializeQuerySchema(operations, SHOW_NODE_SCHEMA_UQL);
+        initializeQueryProperty(operations, persistentSchemas, SHOW_NODE_PROPERTY_UQL);
+
+        nodeSchemas.forEach((schemaName, schema) -> {
+            if (!persistentSchemas.containsKey(schemaName)) {
+
+                if (generate) {
+                    Query query = operations.createQuery(String.format(CREATE_NODE_SCHEMA_UQL, schema.getName(), schema.getDescription()));
+                    query.execute();
+                } else if (validate) {
+                    throw new IllegalArgumentException(String.format("Can't find node schema for '%s'.", schemaName));
+                }
+
+            }
+
+            schema.forEach((propertyName, property) -> {
+                UltipaSchema persistentSchema = persistentSchemas.getOrDefault(schemaName, UltipaSchema.of(schemaName));
+                if (persistentSchema.containsKey(propertyName)) {
+                    UltipaProperty persistentProperty = persistentSchema.get(propertyName);
+                    if (validate && persistentProperty.getType() != property.getType()) {
+                        throw new IllegalArgumentException(String.format("The node property type for '%s.%s' do not match: expected %s, actual %s.",
+                                schemaName, propertyName, persistentProperty.getType().getMappedName(), property.getType().getMappedName()));
+                    }
+                } else if (generate) {
+                    Query query = operations.createQuery(String.format(CREATE_NODE_PROPERTY_UQL, schemaName, propertyName, property.getType().getMappedName(), property.getDescription()));
+                    query.execute();
+                } else if (validate) {
+                    throw new IllegalArgumentException(String.format("Can't find node property for '%s.%s'.", schemaName, propertyName));
+                }
+            });
+        });
+    }
+
+    private void generateAndValidateEdgeSchema(UltipaOperations operations) {
+        Map<String, UltipaSchema> persistentSchemas = initializeQuerySchema(operations, SHOW_EDGE_SCHEMA_UQL);
+        initializeQueryProperty(operations, persistentSchemas, SHOW_EDGE_PROPERTY_UQL);
+
+        edgeSchemas.forEach((schemaName, schema) -> {
+            if (!persistentSchemas.containsKey(schemaName)) {
+
+                if (generate) {
+                    Query query = operations.createQuery(String.format(CREATE_EDGE_SCHEMA_UQL, schema.getName(), schema.getDescription()));
+                    query.execute();
+                } else if (validate) {
+                    throw new IllegalArgumentException(String.format("Can't find edge schema for '%s'.", schemaName));
+                }
+
+            }
+
+            schema.forEach((propertyName, property) -> {
+                UltipaSchema persistentSchema = persistentSchemas.getOrDefault(schemaName, UltipaSchema.of(schemaName));
+                if (persistentSchema.containsKey(propertyName)) {
+                    UltipaProperty persistentProperty = persistentSchema.get(propertyName);
+                    if (validate && persistentProperty.getType() != property.getType()) {
+                        throw new IllegalArgumentException(String.format("The edge property type for '%s.%s' do not match: expected %s, actual %s.",
+                                schemaName, propertyName, persistentProperty.getType().getMappedName(), property.getType().getMappedName()));
+                    }
+                } else if (generate) {
+                    Query query = operations.createQuery(String.format(CREATE_EDGE_PROPERTY_UQL, schemaName, propertyName, property.getType().getMappedName(), property.getDescription()));
+                    query.execute();
+                } else if (validate) {
+                    throw new IllegalArgumentException(String.format("Can't find edge property for '%s.%s'.", schemaName, propertyName));
+                }
+            });
+        });
     }
 
     private Map<String, UltipaSchema> initializeQuerySchema(UltipaOperations operations, String querySchemaUql) {
