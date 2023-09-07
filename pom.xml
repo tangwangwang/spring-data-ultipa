@@ -33,6 +33,7 @@
             <name>Wangwang Tang</name>
             <email>tang.wangwang@qq.com</email>
             <organization>https://www.ultipa.com</organization>
+            <timezone>+8</timezone>
         </developer>
     </developers>
 
