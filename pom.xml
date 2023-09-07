@@ -4,7 +4,7 @@
 
     <groupId>com.tangwangwang</groupId>
     <artifactId>spring-data-ultipa</artifactId>
-    <version>1.0.0-alpha</version>
+    <version>1.0.0-SNAPSHOT</version>
 
     <name>Spring Data Ultipa</name>
     <description>Spring Data Implementation for Ultipa</description>
@@ -18,7 +18,7 @@
     <parent>
         <groupId>org.springframework.data.build</groupId>
         <artifactId>spring-data-parent</artifactId>
-        <version>2.7.14</version>
+        <version>2.7.15-SNAPSHOT</version>
     </parent>
 
     <licenses>
@@ -44,7 +44,7 @@
 
     <properties>
         <java-module-name>spring.data.ultipa</java-module-name>
-        <springdata.commons.version>2.7.14</springdata.commons.version>
+        <springdata.commons.version>2.7.15-SNAPSHOT</springdata.commons.version>
         <ultipa-java-sdk.version>4.3.3</ultipa-java-sdk.version>
         <maven-javadoc-plugin.version>3.5.0</maven-javadoc-plugin.version>
         <maven-gpg-plugin.version>3.1.0</maven-gpg-plugin.version>
