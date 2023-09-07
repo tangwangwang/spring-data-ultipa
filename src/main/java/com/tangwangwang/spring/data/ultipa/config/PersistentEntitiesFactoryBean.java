@@ -1,4 +1,4 @@
-package com.tangwangwang.spring.data.ultipa.repository.config;
+package com.tangwangwang.spring.data.ultipa.config;
 
 import com.tangwangwang.spring.data.ultipa.core.convert.MappingUltipaConverter;
 import org.springframework.beans.factory.FactoryBean;

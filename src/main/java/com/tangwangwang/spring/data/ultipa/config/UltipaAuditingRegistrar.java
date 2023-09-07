@@ -1,10 +1,11 @@
-package com.tangwangwang.spring.data.ultipa.repository.config;
+package com.tangwangwang.spring.data.ultipa.config;
 
 import com.tangwangwang.spring.data.ultipa.core.mapping.event.AuditingEntityCallback;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.beans.factory.support.AbstractBeanDefinition;
 import org.springframework.beans.factory.support.BeanDefinitionBuilder;
 import org.springframework.beans.factory.support.BeanDefinitionRegistry;
+import org.springframework.core.Ordered;
 import org.springframework.core.type.AnnotationMetadata;
 import org.springframework.data.auditing.IsNewAwareAuditingHandler;
 import org.springframework.data.auditing.config.AuditingBeanDefinitionRegistrarSupport;
@@ -18,7 +19,7 @@ import java.lang.annotation.Annotation;
  * @author Wangwang Tang
  * @since 1.0
  */
-public class UltipaAuditingRegistrar extends AuditingBeanDefinitionRegistrarSupport {
+class UltipaAuditingRegistrar extends AuditingBeanDefinitionRegistrarSupport implements Ordered {
 
     /*
      * (non-Javadoc)
@@ -82,5 +83,9 @@ public class UltipaAuditingRegistrar extends AuditingBeanDefinitionRegistrarSupp
         registerInfrastructureBeanWithId(listenerBeanDefinitionBuilder.getBeanDefinition(), AuditingEntityCallback.class.getName(), registry);
     }
 
+    @Override
+    public int getOrder() {
+        return Ordered.LOWEST_PRECEDENCE;
+    }
 }
 
