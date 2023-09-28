@@ -96,7 +96,7 @@ class EdgePersistSchema extends AbstractPersistSchema implements EdgeSchema {
             return getInsertIfAbsentUql();
         }
 
-        String setterClause = Stream.of(getIdentifierSetterClause(), getSystemPropertySetterClause(), getPropertySetterClause())
+        String setterClause = Stream.of(getIdentifierSetterClause(), getSystemIdentifierSetterClause(), getSystemPropertySetterClause(), getPropertySetterClause())
                 .filter(StringUtils::hasText)
                 .collect(Collectors.joining(SETTER_DELIMITER));
 

@@ -133,7 +133,7 @@ class NodePersistSchema extends AbstractPersistSchema implements NodeSchema {
             return getQueryUql();
         }
 
-        String setterClause = Stream.of(getIdentifierSetterClause(), getPropertySetterClause())
+        String setterClause = Stream.of(getIdentifierSetterClause(), getSystemIdentifierSetterClause(), getPropertySetterClause())
                 .filter(StringUtils::hasText)
                 .collect(Collectors.joining(SETTER_DELIMITER));
 

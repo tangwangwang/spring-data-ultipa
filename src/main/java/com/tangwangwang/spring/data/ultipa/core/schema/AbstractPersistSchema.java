@@ -115,6 +115,14 @@ abstract class AbstractPersistSchema extends MapSchema implements PersistSchema 
                 .collect(Collectors.joining(SETTER_DELIMITER));
     }
 
+    protected final String getSystemIdentifierSetterClause() {
+        return getDelegate().entrySet().stream()
+                .filter(it -> UltipaSystemProperty.isSystemProperty(it.getKey()))
+                .filter(it -> UltipaSystemProperty.resolve(it.getKey()).isUniqueIdentifier())
+                .map(it -> String.format(SETTER_CLAUSE, it.getKey(), it.getValue()))
+                .collect(Collectors.joining(SETTER_DELIMITER));
+    }
+
     protected abstract String getInsertUql();
 
     protected abstract String getUpdateUql();
