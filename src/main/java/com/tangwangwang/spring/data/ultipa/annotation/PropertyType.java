@@ -1,11 +1,9 @@
 package com.tangwangwang.spring.data.ultipa.annotation;
 
-import com.ultipa.Ultipa;
-
 import java.util.Objects;
 
 /**
- * Enumeration of property value types that can be used to represent a {@link Ultipa.PropertyType} property value.
+ * Enumeration of property value types that can be used to represent a {@link com.ultipa.Ultipa.PropertyType} property value.
  *
  * @author Wangwang Tang
  * @since 1.0
