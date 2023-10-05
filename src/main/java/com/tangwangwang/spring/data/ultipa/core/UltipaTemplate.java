@@ -41,6 +41,7 @@ import org.springframework.util.CollectionUtils;
 
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Implementation of {@link UltipaOperations} using the new Ultipa client.
@@ -427,6 +428,13 @@ public class UltipaTemplate implements UltipaOperations, ApplicationContextAware
             }
             if (uqlEntity instanceof UqlArray) {
                 ((UqlArray) uqlEntity).forEach(element -> result.add(Schema.of(element)));
+            }
+            if (uqlEntity instanceof Path) {
+                List<Schema> schemas = Stream.concat(
+                        ((Path) uqlEntity).getNodes().stream().map(Schema::of),
+                        ((Path) uqlEntity).getEdges().stream().map(Schema::of)
+                ).collect(Collectors.toList());
+                result.addAll(schemas);
             }
         });
         return result;
