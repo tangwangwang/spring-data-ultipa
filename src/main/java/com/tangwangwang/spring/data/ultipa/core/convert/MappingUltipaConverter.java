@@ -388,7 +388,7 @@ public class MappingUltipaConverter extends AbstractUltipaConverter implements A
         Object convertedValue = getPotentiallyConvertedSimpleWrite(idValue, property.getPropertyType());
         String uqlValue = getPotentiallyConvertedUrlWrite(convertedValue, property.getPropertyType());
         sink.setIdValue(uqlValue);
-        sink.put(property.getPropertyName(), uqlValue);
+        sink.put(property.getPropertyName(), convertedValue);
     }
 
     @Nullable
