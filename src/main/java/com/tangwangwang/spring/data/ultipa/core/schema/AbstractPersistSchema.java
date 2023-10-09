@@ -4,6 +4,7 @@ import com.tangwangwang.spring.data.ultipa.core.mapping.model.UltipaSystemProper
 import org.springframework.lang.Nullable;
 import org.springframework.util.StringUtils;
 
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -111,6 +112,7 @@ abstract class AbstractPersistSchema extends MapSchema implements PersistSchema 
     protected final String getPropertySetterClause() {
         return getDelegate().entrySet().stream()
                 .filter(it -> !UltipaSystemProperty.isSystemProperty(it.getKey()))
+                .filter(it -> !Objects.equals(it.getKey(), idName))
                 .map(it -> String.format(SETTER_CLAUSE, it.getKey(), it.getValue()))
                 .collect(Collectors.joining(SETTER_DELIMITER));
     }

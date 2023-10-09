@@ -365,11 +365,11 @@ public class MappingUltipaConverter extends AbstractUltipaConverter implements A
         if (idValue != null) {
             sink.setIdValue(idValue);
             sink.setIsNew(false);
-            writeIdValue(sink, idValue, property.getPropertyType());
+            writeIdValue(sink, property, idValue);
         } else {
             sink.setIsNew(true);
             idValue = computeId(property, source);
-            writeIdValue(sink, idValue, property.getPropertyType());
+            writeIdValue(sink, property, idValue);
             Boolean isUniqueIdentifier = Optional.ofNullable(property.getSystemProperty())
                     .map(UltipaSystemProperty::isUniqueIdentifier)
                     .orElse(false);
@@ -381,13 +381,14 @@ public class MappingUltipaConverter extends AbstractUltipaConverter implements A
         }
     }
 
-    private void writeIdValue(PersistSchema sink, @Nullable Object idValue, PropertyType idType) {
+    private void writeIdValue(PersistSchema sink, UltipaPersistentProperty property, @Nullable Object idValue) {
         if (idValue == null) {
             return;
         }
-        Object convertedValue = getPotentiallyConvertedSimpleWrite(idValue, idType);
-        String uqlValue = getPotentiallyConvertedUrlWrite(convertedValue, idType);
+        Object convertedValue = getPotentiallyConvertedSimpleWrite(idValue, property.getPropertyType());
+        String uqlValue = getPotentiallyConvertedUrlWrite(convertedValue, property.getPropertyType());
         sink.setIdValue(uqlValue);
+        sink.put(property.getPropertyName(), uqlValue);
     }
 
     @Nullable
